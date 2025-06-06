@@ -15,11 +15,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	_ "go.uber.org/automaxprocs"
 	"k8s.io/component-base/cli"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/term"
 
+	_ "github.com/onexstack/onexstack/pkg/automaxprocs"
 	"github.com/onexstack/onexstack/pkg/log"
 	genericoptions "github.com/onexstack/onexstack/pkg/options"
 	"github.com/onexstack/onexstack/pkg/version"
