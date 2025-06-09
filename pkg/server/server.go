@@ -1,7 +1,7 @@
 // Copyright 2024 孔令飞 <colin404@foxmail.com>. All rights reserved.
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file. The original repo for
-// this file is https://github.com/onexstack/miniblog. The professional
+// this file is https://github.com/onexstack/onexstack. The professional
 // version of this repository is https://github.com/onexstack/onex.
 
 package server
@@ -16,7 +16,7 @@ import (
 
 // Server 定义所有服务器类型的接口.
 type Server interface {
-	// RunOrDie 运行服务器，如果运行失败会退出程序（OrDie的含义所在）.
+	// RunOrDie 运行服务器，如果运行失败会退出程序（OrDie 的含义所在）.
 	RunOrDie()
 	// GracefulStop 方法用来优雅关停服务器。关停服务器时需要处理 context 的超时时间.
 	GracefulStop(ctx context.Context)

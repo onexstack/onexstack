@@ -28,7 +28,7 @@ func OnInitialize(configFile *string, envPrefix string, loadDirs []string, defau
 		// 读取匹配的环境变量
 		viper.AutomaticEnv()
 
-		// 设置环境变量前缀为 MINIBLOG
+		// 设置环境变量前缀
 		viper.SetEnvPrefix(envPrefix)
 
 		// 将 key 字符串中 '.' 和 '-' 替换为 '_'

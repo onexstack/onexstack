@@ -1,7 +1,7 @@
 // Copyright 2024 孔令飞 <colin404@foxmail.com>. All rights reserved.
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file. The original repo for
-// this file is https://github.com/onexstack/miniblog. The professional
+// this file is https://github.com/onexstack/onexstack. The professional
 // version of this repository is https://github.com/onexstack/onex.
 
 package server
@@ -76,7 +76,7 @@ func registerHealthServer(grpcsrv *grpc.Server) {
 	healthServer := health.NewServer()
 
 	// 设定服务的健康状态
-	healthServer.SetServingStatus("MiniBlog", grpc_health_v1.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus("onexstack", grpc_health_v1.HealthCheckResponse_SERVING)
 
 	// 注册健康检查服务
 	grpc_health_v1.RegisterHealthServer(grpcsrv, healthServer)

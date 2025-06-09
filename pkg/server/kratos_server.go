@@ -1,7 +1,7 @@
 // Copyright 2024 孔令飞 <colin404@foxmail.com>. All rights reserved.
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file. The original repo for
-// this file is https://github.com/onexstack/miniblog. The professional
+// this file is https://github.com/onexstack/onexstack. The professional
 // version of this repository is https://github.com/onexstack/onex.
 
 package server
@@ -21,7 +21,7 @@ import (
 	genericoptions "github.com/onexstack/onexstack/pkg/options"
 )
 
-// The purpose of defining the AppConfig is to demonstrate the usage of wire.Struct.
+// KratosAppConfig The purpose of defining the AppConfig is to demonstrate the usage of wire.Struct.
 type KratosAppConfig struct {
 	ID        string
 	Name      string
@@ -30,7 +30,7 @@ type KratosAppConfig struct {
 	Registrar registry.Registrar
 }
 
-// The purpose of defining the AppConfig is to demonstrate the usage of wire.Struct.
+// KratosServer The purpose of defining the AppConfig is to demonstrate the usage of wire.Struct.
 type KratosServer struct {
 	kapp *kratos.App
 }

@@ -84,7 +84,7 @@ func (l *RedisLocker) Unlock(ctx context.Context) error {
 		l.logger.Info("Stopped renewing lock", "lockName", l.lockName)
 	}
 
-	err := l.client.Del(ctx, l.lockName).Err()
+	_, err := l.client.Eval(ctx, deleteScript, []string{l.lockName}, l.ownerID).Result()
 	if err != nil {
 		l.logger.Error("Failed to delete lock", "error", err)
 		return err
@@ -122,3 +122,12 @@ func (l *RedisLocker) renewLock(ctx context.Context) {
 		}
 	}
 }
+
+// a lua script to release the lock, ensures concurrency security
+var deleteScript = `
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("DEL", KEYS[1])
+else
+    return 0
+end
+`
