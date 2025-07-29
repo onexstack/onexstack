@@ -217,6 +217,7 @@ func (app *App) buildCommand() {
 
 		if app.options != nil {
 			fss = typed.Flags()
+			fs = fss.FlagSet("global")
 		}
 
 		for _, f := range fss.FlagSets {
