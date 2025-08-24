@@ -4,4 +4,4 @@
 // this file is https://github.com/onexstack/miniblog. The professional
 // version of this repository is https://github.com/onexstack/onex.
 
-package rid // import "github.com/onexstack/miniblog/internal/pkg/rid"
+package rid // import "github.com/onexstack/onexstack/pkg/rid"
