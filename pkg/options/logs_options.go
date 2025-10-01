@@ -66,5 +66,5 @@ func (o *LogOptions) Native() *logsapi.LoggingConfiguration {
 		c.FlushFrequency.SerializeAsString = true
 	}
 	c.Verbosity = o.Verbosity
-	return c
+	return &c
 }
