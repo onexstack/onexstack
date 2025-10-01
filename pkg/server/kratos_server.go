@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+
 	"github.com/go-kratos/kratos/contrib/registry/consul/v2"
 	"github.com/go-kratos/kratos/contrib/registry/etcd/v2"
 	"github.com/go-kratos/kratos/v2"
@@ -15,9 +16,10 @@ import (
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/go-kratos/kratos/v2/transport"
 	consulapi "github.com/hashicorp/consul/api"
+	krtlogger "github.com/onexstack/onexstack/pkg/logger/klog/kratos"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"k8s.io/klog/v2"
 
-	"github.com/onexstack/onexstack/pkg/log"
 	genericoptions "github.com/onexstack/onexstack/pkg/options"
 )
 
@@ -50,21 +52,21 @@ func NewKratosServer(cfg KratosAppConfig, servers ...transport.Server) (*KratosS
 }
 
 func (s *KratosServer) RunOrDie() {
-	log.Infow("Start to listening the incoming requests", "protocol", "kratos")
+	klog.InfoS("Start to listening the incoming requests", "protocol", "kratos")
 	if err := s.kapp.Run(); err != nil {
-		log.Fatalw("Failed to serve kratos application", "err", err)
+		klog.Fatalf("Failed to serve kratos application: %v", err)
 	}
 }
 
 func (s *KratosServer) GracefulStop(ctx context.Context) {
-	log.Infow("Gracefully stop kratos application")
+	klog.InfoS("Gracefully stop kratos application")
 	if err := s.kapp.Stop(); err != nil {
-		log.Errorw(err, "Failed to gracefully shutdown kratos application")
+		klog.ErrorS(err, "Failed to gracefully shutdown kratos application")
 	}
 }
 
 func NewKratosLogger(id, name, version string) krtlog.Logger {
-	return krtlog.With(log.Default(),
+	return krtlog.With(krtlogger.NewLogger(),
 		"ts", krtlog.DefaultTimestamp,
 		"caller", krtlog.DefaultCaller,
 		"service.id", id,

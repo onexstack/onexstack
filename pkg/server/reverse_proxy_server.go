@@ -19,8 +19,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/protojson"
+	"k8s.io/klog/v2"
 
-	"github.com/onexstack/onexstack/pkg/log"
 	genericoptions "github.com/onexstack/onexstack/pkg/options"
 )
 
@@ -56,7 +56,7 @@ func NewGRPCGatewayServer(
 
 	conn, err := grpc.NewClient(grpcOptions.Addr, dialOptions...)
 	if err != nil {
-		log.Errorw(err, "Failed to dial context")
+		klog.ErrorS(err, "Failed to dial context")
 		return nil, err
 	}
 
@@ -68,7 +68,7 @@ func NewGRPCGatewayServer(
 		},
 	}))
 	if err := registerHandler(gwmux, conn); err != nil {
-		log.Errorw(err, "Failed to register handler")
+		klog.ErrorS(err, "Failed to register handler")
 		return nil, err
 	}
 
@@ -83,7 +83,7 @@ func NewGRPCGatewayServer(
 
 // RunOrDie 启动 GRPC 网关服务器并在出错时记录致命错误.
 func (s *GRPCGatewayServer) RunOrDie() {
-	log.Infow("Start to listening the incoming requests", "protocol", protocolName(s.srv), "addr", s.srv.Addr)
+	klog.InfoS("Start to listening the incoming requests", "protocol", protocolName(s.srv), "addr", s.srv.Addr)
 	// 默认启动 HTTP 服务器
 	serveFn := func() error { return s.srv.ListenAndServe() }
 	if s.srv.TLSConfig != nil {
@@ -91,14 +91,14 @@ func (s *GRPCGatewayServer) RunOrDie() {
 	}
 
 	if err := serveFn(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalw("Failed to server HTTP(s) server", "err", err)
+		klog.Fatalf("Failed to server HTTP(s) server: %v", err)
 	}
 }
 
 // GracefulStop 优雅地关闭 GRPC 网关服务器.
 func (s *GRPCGatewayServer) GracefulStop(ctx context.Context) {
-	log.Infow("Gracefully stop HTTP(s) server")
+	klog.InfoS("Gracefully stop HTTP(s) server")
 	if err := s.srv.Shutdown(ctx); err != nil {
-		log.Errorw(err, "HTTP(s) server forced to shutdown")
+		klog.ErrorS(err, "HTTP(s) server forced to shutdown")
 	}
 }
