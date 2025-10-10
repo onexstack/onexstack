@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/onexstack/onexstack/pkg/log"
+	"k8s.io/klog/v2"
 )
 
 // Logger is a logger that implements the Logger interface.
@@ -17,5 +17,5 @@ func NewLogger() *Logger {
 
 // Error logs an error message with the provided context using the log package.
 func (l *Logger) Error(ctx context.Context, err error, msg string, kvs ...any) {
-	log.W(ctx).Errorw(err, msg, kvs...)
+	klog.FromContext(ctx).Error(err, msg, kvs...)
 }

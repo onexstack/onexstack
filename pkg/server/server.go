@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/onexstack/onexstack/pkg/log"
+	"k8s.io/klog/v2"
 )
 
 // Server 定义所有服务器类型的接口.
@@ -31,7 +31,7 @@ func Serve(ctx context.Context, srv Server) error {
 	<-ctx.Done()
 
 	// Shutdown the server gracefully.
-	log.Infow("Shutting down server...")
+	klog.InfoS("Shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -39,7 +39,7 @@ func Serve(ctx context.Context, srv Server) error {
 	// Gracefully stop the server.
 	srv.GracefulStop(ctx)
 
-	log.Infow("Server exited successfully.")
+	klog.InfoS("Server exited successfully.")
 
 	return nil
 }

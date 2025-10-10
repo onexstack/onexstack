@@ -31,7 +31,7 @@ func NewGRPCServer(
 	grpcOptions *genericoptions.GRPCOptions,
 	tlsOptions *genericoptions.TLSOptions,
 	serverOptions []grpc.ServerOption,
-	registerServer func(grpc.ServiceRegistrar),
+	registerBuilder func() (func(grpc.ServiceRegistrar), string),
 ) (*GRPCServer, error) {
 	lis, err := net.Listen("tcp", grpcOptions.Addr)
 	if err != nil {
@@ -46,8 +46,9 @@ func NewGRPCServer(
 
 	grpcsrv := grpc.NewServer(serverOptions...)
 
-	registerServer(grpcsrv)
-	registerHealthServer(grpcsrv)
+	registerFn, serverName := registerBuilder()
+	registerFn(grpcsrv)
+	registerHealthServer(serverName, grpcsrv)
 	reflection.Register(grpcsrv)
 
 	return &GRPCServer{
@@ -71,12 +72,12 @@ func (s *GRPCServer) GracefulStop(ctx context.Context) {
 }
 
 // registerHealthServer 注册健康检查服务.
-func registerHealthServer(grpcsrv *grpc.Server) {
+func registerHealthServer(serverName string, grpcsrv *grpc.Server) {
 	// 创建健康检查服务实例
 	healthServer := health.NewServer()
 
 	// 设定服务的健康状态
-	healthServer.SetServingStatus("MiniBlog", grpc_health_v1.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus(serverName, grpc_health_v1.HealthCheckResponse_SERVING)
 
 	// 注册健康检查服务
 	grpc_health_v1.RegisterHealthServer(grpcsrv, healthServer)
