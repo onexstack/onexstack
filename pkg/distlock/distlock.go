@@ -33,6 +33,7 @@ type Options struct {
 	lockTimeout time.Duration // Duration before the lock expires
 	ownerID     string        // Identifier for the lock owner
 	logger      logger.Logger // Logger for logging events
+	autoMigrate bool
 }
 
 // Option is a function that modifies Options.
@@ -84,5 +85,12 @@ func WithOwnerID(ownerID string) Option {
 func WithLogger(logger logger.Logger) Option {
 	return func(o *Options) {
 		o.logger = logger // Set the logger
+	}
+}
+
+// WithAutoMigrate sets the autoMigrate in Options.
+func WithAutoMigrate(autoMigrate bool) Option {
+	return func(o *Options) {
+		o.autoMigrate = autoMigrate
 	}
 }

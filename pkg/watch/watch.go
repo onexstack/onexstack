@@ -51,6 +51,8 @@ type Watch struct {
 	initializer initializer.WatcherInitializer
 	// Function for external initialization of watchers.
 	externalInitializer initializer.WatcherInitializer
+	// autoMigrate indicates whether to automatically run database migrations during watcher initialization/startup.
+	autoMigrate bool
 }
 
 // WithInitialize returns an Option function that sets the provided WatcherInitializer
@@ -65,6 +67,13 @@ func WithInitialize(initialize initializer.WatcherInitializer) Option {
 func WithLogger(logger Logger) Option {
 	return func(w *Watch) {
 		w.logger = logger
+	}
+}
+
+// AutoMigrate returns an Option that enables or disables automatic database migrations.
+func AutoMigrate(autoMigrate bool) Option {
+	return func(w *Watch) {
+		w.autoMigrate = w.autoMigrate
 	}
 }
 
@@ -141,6 +150,7 @@ func (w *Watch) Start(stopCh <-chan struct{}) {
 	opts := []distlock.Option{
 		distlock.WithLockTimeout(defaultExpiration),
 		distlock.WithLockName(w.lockName),
+		distlock.WithAutoMigrate(w.autoMigrate),
 	}
 	w.locker, _ = distlock.NewGORMLocker(w.db, opts...)
 	ticker := time.NewTicker(defaultExpiration + (5 * time.Second))
