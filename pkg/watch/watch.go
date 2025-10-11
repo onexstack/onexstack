@@ -70,8 +70,8 @@ func WithLogger(logger Logger) Option {
 	}
 }
 
-// AutoMigrate returns an Option that enables or disables automatic database migrations.
-func AutoMigrate(autoMigrate bool) Option {
+// WithAutoMigrate returns an Option that enables or disables automatic database migrations.
+func WithAutoMigrate(autoMigrate bool) Option {
 	return func(w *Watch) {
 		w.autoMigrate = w.autoMigrate
 	}
