@@ -11,7 +11,6 @@ import (
 	"time"
 
 	iputil "github.com/onexstack/onexstack/pkg/util/ip"
-	"github.com/onexstack/onexstack/pkg/version"
 	"github.com/polarismesh/polaris-go"
 	"github.com/polarismesh/polaris-go/api"
 	"github.com/polarismesh/polaris-go/pkg/model"
@@ -64,7 +63,7 @@ func NewPolarisOptions() *PolarisOptions {
 		Provider: ProviderOptions{
 			Namespace: "default",
 			Host:      iputil.GetLocalIP(),
-			Version:   version.Get().String(),
+			Version:   "v0.1.0",
 			Healthy:   true,
 			TTL:       1,
 			Heartbeat: true,
