@@ -345,6 +345,7 @@ flycheck_*.el
 *.env
 .env.*
 dist
+.semrel
 
 # files used by the developer
 #.idea.md
