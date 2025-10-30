@@ -219,7 +219,7 @@ func (o *OTelOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
 	fs.BoolVar(&o.Insecure, join(prefixes...)+"otel.insecure", o.Insecure, "Use insecure connection")
 	fs.Float64Var(&o.SamplingRatio, join(prefixes...)+"otel.sampling-ratio", o.SamplingRatio, "Sampling ratio (0.0-1.0)")
 	fs.BoolVar(&o.WithResource, join(prefixes...)+"otel.with-resource", o.WithResource, "Include system resource information")
-	fs.Var((*outputModeFlag)(&o.OutputMode), join(prefixes...)+"otel..output-mode", "Output mode: otlp, console, file, slog")
+	fs.Var((*outputModeFlag)(&o.OutputMode), join(prefixes...)+"otel.output-mode", "Output mode: otlp, console, file, slog")
 	fs.StringVar(&o.OutputDir, join(prefixes...)+"otel.output-dir", o.OutputDir, "Output directory for file mode")
 	fs.StringVar(&o.Level, join(prefixes...)+"otel.level", o.Level, "Log level: debug, info, warn, error")
 	fs.BoolVar(&o.AddSource, join(prefixes...)+"otel.add-source", o.AddSource, "Add source code position to logs")
