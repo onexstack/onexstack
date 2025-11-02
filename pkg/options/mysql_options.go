@@ -8,14 +8,14 @@ package options
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/spf13/pflag"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/onexstack/onexstack/pkg/db"
-	"github.com/onexstack/onexstack/pkg/log"
+	gormlogger "github.com/onexstack/onexstack/pkg/logger/slog/gorm"
 )
 
 var _ IOptions = (*MySQLOptions)(nil)
@@ -56,7 +56,7 @@ func (o *MySQLOptions) Validate() []error {
 // AddFlags adds flags related to mysql storage for a specific APIServer to the specified FlagSet.
 func (o *MySQLOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
 	fs.StringVar(&o.Addr, join(prefixes...)+"mysql.host", o.Addr, ""+
-		"MySQL service host address. If left blank, the following related mysql options will be ignored.")
+		"MySQL service host address.")
 	fs.StringVar(&o.Username, join(prefixes...)+"mysql.username", o.Username, "Username for access to mysql service.")
 	fs.StringVar(&o.Password, join(prefixes...)+"mysql.password", o.Password, ""+
 		"Password for access to mysql, should be used pair with password.")
@@ -93,7 +93,7 @@ func (o *MySQLOptions) NewDB() (*gorm.DB, error) {
 		MaxIdleConnections:    o.MaxIdleConnections,
 		MaxOpenConnections:    o.MaxOpenConnections,
 		MaxConnectionLifeTime: o.MaxConnectionLifeTime,
-		Logger:                log.Default().LogMode(gormlogger.LogLevel(o.LogLevel)),
+		Logger:                gormlogger.New(slog.Default()),
 	}
 
 	return db.NewMySQL(opts)

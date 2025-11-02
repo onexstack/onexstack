@@ -7,14 +7,14 @@
 package options
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/spf13/pflag"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/onexstack/onexstack/pkg/db"
-	"github.com/onexstack/onexstack/pkg/log"
+	gormlogger "github.com/onexstack/onexstack/pkg/logger/slog/gorm"
 )
 
 var _ IOptions = (*PostgreSQLOptions)(nil)
@@ -81,7 +81,7 @@ func (o *PostgreSQLOptions) NewDB() (*gorm.DB, error) {
 		MaxIdleConnections:    o.MaxIdleConnections,
 		MaxOpenConnections:    o.MaxOpenConnections,
 		MaxConnectionLifeTime: o.MaxConnectionLifeTime,
-		Logger:                log.Default().LogMode(gormlogger.LogLevel(o.LogLevel)),
+		Logger:                gormlogger.New(slog.Default()),
 	}
 
 	return db.NewPostgreSQL(opts)
