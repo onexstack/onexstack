@@ -64,6 +64,14 @@ func WithAsyncRefresh[K Key, V any](interval time.Duration) Option[K, V] {
 	}
 }
 
+// WithEnableAsync enables/disable async refresh with specified interval.
+func WithEnableAsync[K Key, V any](enabled bool) Option[K, V] {
+	return func(config *Config[K, V]) error {
+		config.EnableAsync = enabled
+		return nil
+	}
+}
+
 // WithRefreshMode sets the refresh mode (single or batch)
 func WithRefreshMode[K Key, V any](mode RefreshMode) Option[K, V] {
 	return func(config *Config[K, V]) error {

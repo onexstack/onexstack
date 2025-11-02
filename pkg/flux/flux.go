@@ -180,7 +180,7 @@ func NewFluxConfig[K Key, V any]() *Config[K, V] {
 		LoadTimeout:     30 * time.Second,
 		EnableAsync:     false,
 		RefreshInterval: 2 * time.Minute,
-		RefreshMode:     RefreshSingle,
+		RefreshMode:     RefreshAuto,
 		MaxConcurrency:  10,
 		BatchSize:       100,
 		EnableStats:     true,
@@ -268,19 +268,6 @@ func (f *Flux[K, V]) Refresh(ctx context.Context, key K) error {
 	return err
 }
 
-// RefreshAll manually refreshes all data using the best available method
-func (f *Flux[K, V]) RefreshAll(ctx context.Context) error {
-	if atomic.LoadInt32(&f.closed) == 1 {
-		return ErrCacheClosed
-	}
-
-	if f.config.Loader == nil {
-		return ErrLoaderNotSet
-	}
-
-	return f.refreshAll(ctx)
-}
-
 // Keys returns all keys currently in the cache
 func (f *Flux[K, V]) Keys() []K {
 	if atomic.LoadInt32(&f.closed) == 1 {
@@ -360,112 +347,53 @@ func (f *Flux[K, V]) loadAndSet(ctx context.Context, key K) (V, error) {
 		return *new(V), ErrLoaderNotSet
 	}
 
-	// Create timeout context
-	loadCtx := ctx
-	if f.config.LoadTimeout > 0 {
-		var cancel context.CancelFunc
-		loadCtx, cancel = context.WithTimeout(ctx, f.config.LoadTimeout)
-		defer cancel()
-	}
+	result := make(chan struct {
+		value V
+		err   error
+	}, 1)
 
-	// Load data
-	if f.config.EnableStats {
-		atomic.AddUint64(&f.stats.Loads, 1)
-	}
+	go func() {
+		value, err := f.config.Loader.Load(ctx, key)
+		result <- struct {
+			value V
+			err   error
+		}{value, err}
+	}()
 
-	value, err := f.config.Loader.Load(loadCtx, key)
-	if err != nil {
+	select {
+	case res := <-result:
+		if res.err != nil {
+			if f.config.EnableStats {
+				atomic.AddUint64(&f.stats.LoadErrors, 1)
+			}
+			return *new(V), fmt.Errorf("failed to load key %v: %w", key, res.err)
+		}
+
+		cost := int64(1)
+		if f.config.TTL > 0 {
+			f.cache.SetWithTTL(key, res.value, cost, f.config.TTL)
+		} else {
+			f.cache.Set(key, res.value, cost)
+		}
+
+		// Load data
+		if f.config.EnableStats {
+			atomic.AddUint64(&f.stats.Loads, 1)
+		}
+
+		f.trackKey(key)
+		return res.value, nil
+	case <-time.After(f.config.LoadTimeout):
 		if f.config.EnableStats {
 			atomic.AddUint64(&f.stats.LoadErrors, 1)
 		}
-		return *new(V), fmt.Errorf("failed to load key %v: %w", key, err)
-	}
-
-	// Store in cache
-	cost := int64(1)
-	if f.config.TTL > 0 {
-		f.cache.SetWithTTL(key, value, cost, f.config.TTL)
-	} else {
-		f.cache.Set(key, value, cost)
-	}
-
-	f.trackKey(key)
-	return value, nil
-}
-
-// refreshAll refreshes all data using LoadAll method
-func (f *Flux[K, V]) refreshAll(ctx context.Context) error {
-	allLoader, ok := f.config.Loader.(AllLoader[K, V])
-	if !ok {
-		return fmt.Errorf("%w: LoadAll method not available", ErrLoaderMethodNotImplemented)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), f.config.LoadTimeout)
-	defer cancel()
-
-	allData, err := allLoader.LoadAll(ctx)
-	if err != nil {
+		return *new(V), fmt.Errorf("load timeout for key %v", key)
+	case <-ctx.Done():
 		if f.config.EnableStats {
-			atomic.AddUint64(&f.stats.RefreshErrors, 1)
+			atomic.AddUint64(&f.stats.LoadErrors, 1)
 		}
-		return fmt.Errorf("failed to load all data: %w", err)
+		return *new(V), ctx.Err()
 	}
-
-	// Update cache with all data
-	f.updateCacheWithBatchValues(allData)
-
-	if f.config.EnableStats {
-		atomic.AddUint64(&f.stats.Refreshes, uint64(len(allData)))
-	}
-
-	return nil
-}
-
-// updateCacheWithBatchValues updates the cache with batch-loaded values
-func (f *Flux[K, V]) updateCacheWithBatchValues(values map[K]V) {
-	if len(values) == 0 {
-		return
-	}
-
-	now := time.Now()
-	cost := int64(1)
-
-	f.keysMutex.Lock()
-	defer f.keysMutex.Unlock()
-
-	for key, value := range values {
-		// Update cache entry
-		if f.config.TTL > 0 {
-			f.cache.SetWithTTL(key, value, cost, f.config.TTL)
-		} else {
-			f.cache.Set(key, value, cost)
-		}
-
-		// Update tracking timestamp
-		f.trackedKeys[key] = now
-	}
-}
-
-// trackKey adds a key to the tracking list for async refresh
-func (f *Flux[K, V]) trackKey(key K) {
-	if !f.config.EnableAsync {
-		return
-	}
-
-	f.keysMutex.Lock()
-	f.trackedKeys[key] = time.Now()
-	f.keysMutex.Unlock()
-}
-
-// untrackKey removes a key from the tracking list
-func (f *Flux[K, V]) untrackKey(key K) {
-	if !f.config.EnableAsync {
-		return
-	}
-
-	f.keysMutex.Lock()
-	delete(f.trackedKeys, key)
-	f.keysMutex.Unlock()
 }
 
 // startAsyncRefresh starts the async refresh background process
@@ -494,20 +422,6 @@ func (f *Flux[K, V]) startAsyncRefresh() {
 	// Start scheduler goroutine
 	f.wg.Add(1)
 	go f.refreshScheduler()
-}
-
-// refreshScheduler schedules keys for refresh
-func (f *Flux[K, V]) refreshScheduler() {
-	defer f.wg.Done()
-
-	for {
-		select {
-		case <-f.refreshTicker.C:
-			f.scheduleRefresh()
-		case <-f.stopCh:
-			return
-		}
-	}
 }
 
 // refreshWorker processes single key refresh requests
@@ -561,6 +475,20 @@ func (f *Flux[K, V]) allWorker() {
 	}
 }
 
+// refreshScheduler schedules keys for refresh
+func (f *Flux[K, V]) refreshScheduler() {
+	defer f.wg.Done()
+
+	for {
+		select {
+		case <-f.refreshTicker.C:
+			f.scheduleRefresh()
+		case <-f.stopCh:
+			return
+		}
+	}
+}
+
 // scheduleRefresh schedules keys for refresh based on mode
 func (f *Flux[K, V]) scheduleRefresh() {
 	f.keysMutex.RLock()
@@ -591,37 +519,6 @@ func (f *Flux[K, V]) scheduleRefresh() {
 	}
 }
 
-// scheduleAutoRefresh automatically selects the best refresh method
-func (f *Flux[K, V]) scheduleAutoRefresh(keys []K) {
-	// Priority: LoadAll > LoadBatch > Load
-	if f.hasLoadAll {
-		f.scheduleAllRefresh()
-	} else if f.hasLoadBatch {
-		f.scheduleBatchRefresh(keys)
-	} else if f.hasLoad {
-		f.scheduleSingleRefresh(keys)
-	}
-}
-
-// shouldRefreshKey determines if a key should be refreshed
-func (f *Flux[K, V]) shouldRefreshKey(key K, lastAccess, now time.Time) bool {
-	// Don't refresh if key hasn't been accessed recently
-	if f.config.TTL > 0 && now.Sub(lastAccess) > f.config.TTL {
-		// Remove expired keys from tracking
-		go f.untrackKey(key)
-		return false
-	}
-
-	// Check if key still exists in cache
-	if _, found := f.cache.Get(key); !found {
-		// Remove non-existent keys from tracking
-		go f.untrackKey(key)
-		return false
-	}
-
-	return true
-}
-
 // scheduleSingleRefresh schedules individual key refreshes
 func (f *Flux[K, V]) scheduleSingleRefresh(keys []K) {
 	for _, key := range keys {
@@ -632,16 +529,6 @@ func (f *Flux[K, V]) scheduleSingleRefresh(keys []K) {
 			// Queue full, skip this key
 			return
 		}
-	}
-}
-
-// scheduleAllRefresh schedules LoadAll refresh
-func (f *Flux[K, V]) scheduleAllRefresh() {
-	select {
-	case f.allQueue <- struct{}{}:
-		// Successfully queued
-	default:
-		// LoadAll already in progress or queue full, skip
 	}
 }
 
@@ -680,55 +567,219 @@ func (f *Flux[K, V]) scheduleBatchRefresh(keys []K) {
 	}
 }
 
-// processBatchRefresh processes a batch of keys for refresh
+// scheduleAutoRefresh automatically selects the best refresh method
+func (f *Flux[K, V]) scheduleAutoRefresh(keys []K) {
+	// Priority: LoadAll > LoadBatch > Load
+	if f.hasLoadAll {
+		f.scheduleAllRefresh()
+	} else if f.hasLoadBatch {
+		f.scheduleBatchRefresh(keys)
+	} else if f.hasLoad {
+		f.scheduleSingleRefresh(keys)
+	}
+}
+
+// refreshKey refreshes a single key
+func (f *Flux[K, V]) refreshKey(key K) error {
+	result := make(chan struct {
+		value V
+		err   error
+	}, 1)
+
+	go func() {
+		value, err := f.config.Loader.Load(context.Background(), key)
+		result <- struct {
+			value V
+			err   error
+		}{value, err}
+	}()
+
+	select {
+	case res := <-result:
+		if res.err != nil {
+			if f.config.EnableStats {
+				atomic.AddUint64(&f.stats.RefreshErrors, 1)
+			}
+			return fmt.Errorf("failed to load key: %w", res.err)
+		}
+
+		// Update cache with loaded value
+		f.updateCacheWithBatchValues(map[K]V{key: res.value})
+
+		if f.config.EnableStats {
+			atomic.AddUint64(&f.stats.Refreshes, 1)
+		}
+		return nil
+	case <-time.After(f.config.LoadTimeout):
+		if f.config.EnableStats {
+			atomic.AddUint64(&f.stats.RefreshErrors, 1)
+		}
+		return fmt.Errorf("single load timeout for key %v", key)
+	}
+}
+
+// refreshBatch  processes a batch of keys for refresh
 func (f *Flux[K, V]) refreshBatch(keys []K) error {
 	batchLoader, ok := f.config.Loader.(BatchLoader[K, V])
 	if !ok {
 		return fmt.Errorf("%w: LoadBatch method not available", ErrLoaderMethodNotImplemented)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), f.config.LoadTimeout)
-	defer cancel()
+	result := make(chan struct {
+		values map[K]V
+		err    error
+	}, 1)
 
-	batchData, err := batchLoader.LoadBatch(ctx, keys)
-	if err != nil {
-		if f.config.EnableStats {
-			atomic.AddUint64(&f.stats.RefreshErrors, uint64(len(keys)))
+	go func() {
+		batchData, err := batchLoader.LoadBatch(context.Background(), keys)
+		result <- struct {
+			values map[K]V
+			err    error
+		}{batchData, err}
+	}()
+
+	select {
+	case res := <-result:
+		if res.err != nil {
+			if f.config.EnableStats {
+				atomic.AddUint64(&f.stats.RefreshErrors, uint64(len(keys)))
+			}
+			return fmt.Errorf("failed to load batch data: %w", res.err)
 		}
-		return fmt.Errorf("failed to load batch data: %w", err)
+
+		// Update cache with loaded values
+		f.updateCacheWithBatchValues(res.values)
+
+		if f.config.EnableStats {
+			atomic.AddUint64(&f.stats.Refreshes, uint64(len(res.values)))
+		}
+		return nil
+	case <-time.After(f.config.LoadTimeout):
+		if f.config.EnableStats {
+			atomic.AddUint64(&f.stats.LoadErrors, 1)
+		}
+		return fmt.Errorf("batch load timeout")
 	}
-
-	// Update cache with loaded batchData
-	f.updateCacheWithBatchValues(batchData)
-
-	if f.config.EnableStats {
-		atomic.AddUint64(&f.stats.Refreshes, uint64(len(batchData)))
-	}
-
-	return nil
 }
 
-// refreshKey refreshes a single key
-func (f *Flux[K, V]) refreshKey(key K) error {
-	ctx, cancel := context.WithTimeout(context.Background(), f.config.LoadTimeout)
-	defer cancel()
+// refreshAll refreshes all data using LoadAll method
+func (f *Flux[K, V]) refreshAll(ctx context.Context) error {
+	allLoader, ok := f.config.Loader.(AllLoader[K, V])
+	if !ok {
+		return fmt.Errorf("%w: LoadAll method not available", ErrLoaderMethodNotImplemented)
+	}
 
-	value, err := f.config.Loader.Load(ctx, key)
-	if err != nil {
+	result := make(chan struct {
+		values map[K]V
+		err    error
+	}, 1)
+
+	go func() {
+		allData, err := allLoader.LoadAll(ctx)
+		result <- struct {
+			values map[K]V
+			err    error
+		}{allData, err}
+	}()
+
+	select {
+	case res := <-result:
+		if res.err != nil {
+			if f.config.EnableStats {
+				atomic.AddUint64(&f.stats.RefreshErrors, 1)
+			}
+			return fmt.Errorf("failed to load all data: %w", res.err)
+		}
+
+		// Update cache with all data
+		f.updateCacheWithBatchValues(res.values)
+
+		if f.config.EnableStats {
+			atomic.AddUint64(&f.stats.Refreshes, uint64(len(res.values)))
+		}
+		return nil
+	case <-time.After(f.config.LoadTimeout):
 		if f.config.EnableStats {
 			atomic.AddUint64(&f.stats.RefreshErrors, 1)
 		}
-		return fmt.Errorf("failed to load key: %w", err)
+		return fmt.Errorf("load all data timeout")
+	}
+}
+
+// updateCacheWithBatchValues updates the cache with batch-loaded values
+func (f *Flux[K, V]) updateCacheWithBatchValues(values map[K]V) {
+	if len(values) == 0 {
+		return
 	}
 
-	// Update cache with loaded value
-	f.updateCacheWithBatchValues(map[K]V{key: value})
+	now := time.Now()
+	cost := int64(1)
 
-	if f.config.EnableStats {
-		atomic.AddUint64(&f.stats.Refreshes, 1)
+	f.keysMutex.Lock()
+	defer f.keysMutex.Unlock()
+
+	for key, value := range values {
+		// Update cache entry
+		if f.config.TTL > 0 {
+			f.cache.SetWithTTL(key, value, cost, f.config.TTL)
+		} else {
+			f.cache.Set(key, value, cost)
+		}
+
+		// Update tracking timestamp
+		f.trackedKeys[key] = now
+	}
+}
+
+// shouldRefreshKey determines if a key should be refreshed
+func (f *Flux[K, V]) shouldRefreshKey(key K, lastAccess, now time.Time) bool {
+	// Don't refresh if key hasn't been accessed recently
+	if f.config.TTL > 0 && now.Sub(lastAccess) > f.config.TTL {
+		// Remove expired keys from tracking
+		go f.untrackKey(key)
+		return false
 	}
 
-	return nil
+	// Check if key still exists in cache
+	if _, found := f.cache.Get(key); !found {
+		// Remove non-existent keys from tracking
+		go f.untrackKey(key)
+		return false
+	}
+
+	return true
+}
+
+// scheduleAllRefresh schedules LoadAll refresh
+func (f *Flux[K, V]) scheduleAllRefresh() {
+	select {
+	case f.allQueue <- struct{}{}:
+		// Successfully queued
+	default:
+		// LoadAll already in progress or queue full, skip
+	}
+}
+
+// trackKey adds a key to the tracking list for async refresh
+func (f *Flux[K, V]) trackKey(key K) {
+	if !f.config.EnableAsync {
+		return
+	}
+
+	f.keysMutex.Lock()
+	f.trackedKeys[key] = time.Now()
+	f.keysMutex.Unlock()
+}
+
+// untrackKey removes a key from the tracking list
+func (f *Flux[K, V]) untrackKey(key K) {
+	if !f.config.EnableAsync {
+		return
+	}
+
+	f.keysMutex.Lock()
+	delete(f.trackedKeys, key)
+	f.keysMutex.Unlock()
 }
 
 // validateConfig validates the configuration
