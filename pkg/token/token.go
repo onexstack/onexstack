@@ -32,8 +32,8 @@ type Option func(*Config)
 
 var (
 	config = Config{
-		key:         "Rtg8BPKNEf2mB4mgvKONGPZZQSaJWNLijxR42qRgq0iBb5",
-		identityKey: "identityKey",
+		key:         "",
+		identityKey: "",
 		expiration:  2 * time.Hour,
 		skipPaths:   []string{}, // 默认不跳过任何路径
 	}
@@ -225,7 +225,7 @@ func ParseIdentity(tokenString string, key string) (string, error) {
 
 	// 解析 token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// 确保 token 加密算法���预期的加密算法
+		// 确保 token 加密算法符合预期的加密算法
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
