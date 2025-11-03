@@ -30,14 +30,14 @@ type Key interface {
 type RefreshMode int
 
 const (
-	// RefreshSingle refreshes keys one by one
-	RefreshSingle RefreshMode = iota
+	// RefreshModeSingle refreshes keys one by one
+	RefreshModeSingle RefreshMode = iota
 	// RefreshBatch refreshes keys in batches
-	RefreshBatch
+	RefreshModeBatch
 	// RefreshAll refreshes all keys
-	RefreshAll
+	RefreshModeAll
 	// RefreshAuto automatically selects the best refresh method (LoadAll > LoadBatch > Load)
-	RefreshAuto
+	RefreshModeAuto
 )
 
 // Loader defines the interface for loading data from external sources
@@ -125,8 +125,8 @@ type Flux[K Key, V any] struct {
 	hasLoad      bool
 }
 
-// New creates a new Flux cache instance
-func New[K Key, V any](opts ...Option[K, V]) (*Flux[K, V], error) {
+// NewFlux creates a new Flux cache instance
+func NewFlux[K Key, V any](opts ...Option[K, V]) (*Flux[K, V], error) {
 	config := NewFluxConfig[K, V]()
 
 	// Apply options
@@ -175,12 +175,12 @@ func New[K Key, V any](opts ...Option[K, V]) (*Flux[K, V], error) {
 func NewFluxConfig[K Key, V any]() *Config[K, V] {
 	return &Config[K, V]{
 		MaxKeys:         1000,
-		TTL:             10 * time.Minute,
+		TTL:             30 * time.Minute,
 		BufferItems:     64,
 		LoadTimeout:     30 * time.Second,
 		EnableAsync:     false,
 		RefreshInterval: 2 * time.Minute,
-		RefreshMode:     RefreshAuto,
+		RefreshMode:     RefreshModeAuto,
 		MaxConcurrency:  10,
 		BatchSize:       100,
 		EnableStats:     true,
@@ -508,13 +508,13 @@ func (f *Flux[K, V]) scheduleRefresh() {
 	}
 
 	switch f.config.RefreshMode {
-	case RefreshSingle:
+	case RefreshModeSingle:
 		f.scheduleSingleRefresh(keysToRefresh)
-	case RefreshBatch:
+	case RefreshModeBatch:
 		f.scheduleBatchRefresh(keysToRefresh)
-	case RefreshAll:
+	case RefreshModeAll:
 		f.scheduleAllRefresh()
-	case RefreshAuto:
+	case RefreshModeAuto:
 		f.scheduleAutoRefresh(keysToRefresh)
 	}
 }
@@ -816,24 +816,24 @@ func validateLoaderMethods[K Key, V any](config *Config[K, V]) error {
 	}
 
 	switch config.RefreshMode {
-	case RefreshSingle:
+	case RefreshModeSingle:
 		// RefreshSingle only needs Load method (which is guaranteed by the interface)
 		return nil
 
-	case RefreshBatch:
+	case RefreshModeBatch:
 		// RefreshBatch requires LoadBatch method
 		if _, ok := config.Loader.(BatchLoader[K, V]); !ok {
 			return fmt.Errorf("%w: LoadBatch method required for RefreshBatch mode", ErrLoaderMethodNotImplemented)
 		}
 		return nil
-	case RefreshAll:
+	case RefreshModeAll:
 		// RefreshAll requires LoadAll method
 		if _, ok := config.Loader.(AllLoader[K, V]); !ok {
 			return fmt.Errorf("%w: LoadAll method required for RefreshAll mode", ErrLoaderMethodNotImplemented)
 		}
 		return nil
 
-	case RefreshAuto:
+	case RefreshModeAuto:
 		// RefreshAuto needs at least one method (Load is guaranteed, so always valid)
 		return nil
 

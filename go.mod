@@ -5,11 +5,9 @@ go 1.24.0
 require (
 	github.com/BurntSushi/toml v1.4.0
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
-	github.com/bluele/gcache v0.0.2
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/casbin/casbin/v2 v2.103.0
 	github.com/casbin/gorm-adapter/v3 v3.32.0
-	github.com/dgraph-io/ristretto v0.2.0
 	github.com/dgraph-io/ristretto/v2 v2.3.0
 	github.com/fatih/color v1.18.0
 	github.com/fsnotify/fsnotify v1.8.0
@@ -31,7 +29,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/jinzhu/copier v0.4.0
 	github.com/kisielk/errcheck v1.8.0
-	github.com/maypok86/otter/v2 v2.2.1
+	github.com/maypok86/otter v1.2.4
 	github.com/nicksnyder/go-i18n/v2 v2.4.1
 	github.com/polarismesh/grpc-go-polaris v1.5.0
 	github.com/polarismesh/polaris-go v1.6.1
@@ -101,9 +99,11 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dlclark/regexp2 v1.11.0 // indirect
+	github.com/dolthub/maphash v0.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.10 // indirect
+	github.com/gammazero/deque v0.2.1 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/glebarez/go-sqlite v1.20.3 // indirect
 	github.com/glebarez/sqlite v1.7.0 // indirect
@@ -150,6 +150,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mattn/go-sqlite3 v1.14.22 // indirect
+	github.com/maypok86/otter/v2 v2.2.1 // indirect
 	github.com/microsoft/go-mssqldb v1.6.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
