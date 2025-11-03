@@ -52,6 +52,7 @@ func NewUserLoader() *UserLoader {
 			"9":  {ID: 9, Name: "Charlie", Email: "charlie@example.com"},
 			"10": {ID: 10, Name: "Charlie", Email: "charlie@example.com"},
 			"11": {ID: 11, Name: "Charlie", Email: "charlie@example.com"},
+			"12": {ID: 12, Name: "Charlie", Email: "charlie@example.com"},
 		},
 	}
 }
