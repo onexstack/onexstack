@@ -11,11 +11,11 @@ import (
 
 var (
 	// gitVersion 是语义化的版本号.
-	gitVersion = "v0.0.0-master+$Format:%h$"
+	gitVersion = ""
 	// buildDate 是 ISO8601 格式的构建时间, $(date -u +'%Y-%m-%dT%H:%M:%SZ') 命令的输出.
-	buildDate = "1970-01-01T00:00:00Z"
+	buildDate = ""
 	// gitCommit 是 Git 的 SHA1 值，$(git rev-parse HEAD) 命令的输出.
-	gitCommit = "$Format:%H$"
+	gitCommit = ""
 	// gitTreeState 代表构建时 Git 仓库的状态，可能的值有：clean, dirty.
 	gitTreeState = ""
 )
@@ -74,7 +74,7 @@ func Get() Info {
 	}
 }
 
-func GetFromDebugInfo() Info {
+func GetFromDebugInfo(modulePath string) Info {
 	info := Info{
 		GoVersion: runtime.Version(),
 		Compiler:  runtime.Compiler,
@@ -83,9 +83,14 @@ func GetFromDebugInfo() Info {
 
 	// 尝试从构建信息中获取版本
 	if buildInfo, ok := debug.ReadBuildInfo(); ok {
-		if buildInfo.Main.Version != "" && buildInfo.Main.Version != "(devel)" {
-			info.GitVersion = buildInfo.Main.Version
+		mod := findModule(buildInfo, modulePath)
+		if mod == nil {
+			info.GitVersion = "unknown"
 		}
+		if mod.Replace != nil {
+			mod = mod.Replace
+		}
+		info.GitVersion = mod.Version
 
 		// 从构建设置中获取更多信息
 		for _, setting := range buildInfo.Settings {
@@ -104,4 +109,16 @@ func GetFromDebugInfo() Info {
 	}
 
 	return info
+}
+
+func findModule(info *debug.BuildInfo, modulePath string) *debug.Module {
+	if info.Main.Path == modulePath {
+		return &info.Main
+	}
+	for _, dep := range info.Deps {
+		if dep.Path == modulePath {
+			return dep
+		}
+	}
+	return nil
 }
