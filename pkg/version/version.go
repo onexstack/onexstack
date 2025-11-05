@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime"
+	"runtime/debug"
 
 	"github.com/gosuri/uitable"
 )
@@ -71,4 +72,36 @@ func Get() Info {
 		Compiler:     runtime.Compiler,
 		Platform:     fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 	}
+}
+
+func GetFromDebugInfo() Info {
+	info := Info{
+		GoVersion: runtime.Version(),
+		Compiler:  runtime.Compiler,
+		Platform:  fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+	}
+
+	// 尝试从构建信息中获取版本
+	if buildInfo, ok := debug.ReadBuildInfo(); ok {
+		if buildInfo.Main.Version != "" && buildInfo.Main.Version != "(devel)" {
+			info.GitVersion = buildInfo.Main.Version
+		}
+
+		// 从构建设置中获取更多信息
+		for _, setting := range buildInfo.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				info.GitCommit = setting.Value
+			case "vcs.time":
+				info.BuildDate = setting.Value
+			case "vcs.modified":
+				info.GitTreeState = "clean"
+				if setting.Value == "true" {
+					info.GitTreeState = "dirty"
+				}
+			}
+		}
+	}
+
+	return info
 }
