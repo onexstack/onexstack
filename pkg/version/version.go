@@ -93,19 +93,17 @@ func GetFromDebugInfo(modulePath string) Info {
 		}
 		info.GitVersion = mod.Version
 
+		info.GitCommit = "unknown"
+		info.BuildDate = time.Now().Format(time.RFC3339)
+		info.GitTreeState = "clean"
 		// 从构建设置中获取更多信息
 		for _, setting := range buildInfo.Settings {
-			fmt.Println("11111111111111111111111111111111111", setting)
 			switch setting.Key {
 			case "vcs.revision":
 				info.GitCommit = setting.Value
 			case "vcs.time":
 				info.BuildDate = setting.Value
-				if info.BuildDate == "" {
-					info.BuildDate = time.Now().Format(time.RFC3339)
-				}
 			case "vcs.modified":
-				info.GitTreeState = "clean"
 				if setting.Value == "true" {
 					info.GitTreeState = "dirty"
 				}
