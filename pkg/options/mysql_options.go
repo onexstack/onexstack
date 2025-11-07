@@ -36,9 +36,9 @@ type MySQLOptions struct {
 func NewMySQLOptions() *MySQLOptions {
 	return &MySQLOptions{
 		Addr:                  "127.0.0.1:3306",
-		Username:              "onex",
-		Password:              "onex(#)666",
-		Database:              "onex",
+		Username:              "",
+		Password:              "",
+		Database:              "",
 		MaxIdleConnections:    100,
 		MaxOpenConnections:    100,
 		MaxConnectionLifeTime: time.Duration(10) * time.Second,
