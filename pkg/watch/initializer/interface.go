@@ -1,8 +1,11 @@
 package initializer
 
 import (
+	"time"
+
 	"github.com/onexstack/onexstack/pkg/watch/manager"
 	"github.com/onexstack/onexstack/pkg/watch/registry"
+	"go.uber.org/ratelimit"
 )
 
 // WatcherInitializer is used for initialization of shareable resources between watcher plugins.
@@ -17,8 +20,23 @@ type WantsJobManager interface {
 	SetJobManager(jm *manager.JobManager)
 }
 
-// WantsMaxWorkers defines a function which sets max workers for watcher plugins that need it.
-type WantsMaxWorkers interface {
+// WantsRateLimit defines an interface for watchers that need to configure rate limiting.
+type WantsRateLimit interface {
 	registry.Watcher
-	SetMaxWorkers(maxWorkers int64)
+	// SetRateLimit sets the maximum number of operations allowed per second for this watcher.
+	SetRateLimit(rateLimit ratelimit.Limiter)
+}
+
+// WantsWatchTimeout defines an interface for watchers that need to configure execution timeout.
+type WantsWatchTimeout interface {
+	registry.Watcher
+	// SetWatchTimeout sets the maximum duration allowed for a single watch execution.
+	SetWatchTimeout(timeout time.Duration)
+}
+
+// WantsPerConcurrency defines an interface for watchers that need to configure concurrency limits.
+type WantsPerConcurrency interface {
+	registry.Watcher
+	// SetPerConcurrency sets the maximum number of concurrent executions allowed for this watcher.
+	SetPerConcurrency(concurrency int)
 }

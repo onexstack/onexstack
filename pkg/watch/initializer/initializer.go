@@ -1,23 +1,33 @@
 package initializer
 
 import (
+	"time"
+
 	"github.com/onexstack/onexstack/pkg/watch/manager"
 	"github.com/onexstack/onexstack/pkg/watch/registry"
+	"go.uber.org/ratelimit"
 )
 
 // watcherInitializer is responsible for initializing specific watcher plugins.
 type watcherInitializer struct {
 	jm *manager.JobManager
 	// Specify the maximum concurrency event of user watcher.
-	maxWorkers int64
+	rl             ratelimit.Limiter
+	watchTimeout   time.Duration
+	perConcurrency int
 }
 
 // Ensure that watcherInitializer implements the WatcherInitializer interface.
 var _ WatcherInitializer = (*watcherInitializer)(nil)
 
 // NewInitializer creates and returns a new watcherInitializer instance.
-func NewInitializer(jm *manager.JobManager, maxWorkers int64) *watcherInitializer {
-	return &watcherInitializer{jm: jm, maxWorkers: maxWorkers}
+func NewInitializer(jm *manager.JobManager, maxWorkers int64, timeout time.Duration, concur int) *watcherInitializer {
+	return &watcherInitializer{
+		jm:             jm,
+		rl:             ratelimit.New(int(maxWorkers)),
+		watchTimeout:   timeout,
+		perConcurrency: concur,
+	}
 }
 
 // Initialize configures the provided watcher by setting up the necessary dependencies
@@ -30,7 +40,15 @@ func (i *watcherInitializer) Initialize(wc registry.Watcher) {
 		wants.SetJobManager(i.jm)
 	}
 
-	if wants, ok := wc.(WantsMaxWorkers); ok {
-		wants.SetMaxWorkers(i.maxWorkers)
+	if wants, ok := wc.(WantsRateLimit); ok {
+		wants.SetRateLimit(i.rl)
+	}
+
+	if wants, ok := wc.(WantsWatchTimeout); ok {
+		wants.SetWatchTimeout(i.watchTimeout)
+	}
+
+	if wants, ok := wc.(WantsPerConcurrency); ok {
+		wants.SetPerConcurrency(i.perConcurrency)
 	}
 }

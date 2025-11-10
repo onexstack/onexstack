@@ -38,9 +38,8 @@ type OutputMode string
 
 const (
 	OutputModeOTLP    OutputMode = "otel"    // Send to OpenTelemetry Collector
-	OutputModeConsole OutputMode = "console" // Output to standard output
 	OutputModeFile    OutputMode = "file"    // Output to files
-	OutputModeSlog    OutputMode = "slog"    // Use native slog package
+	OutputModeConsole OutputMode = "console" // Output to standard output
 )
 
 // String implements the Stringer interface
@@ -51,7 +50,7 @@ func (o OutputMode) String() string {
 // IsValid validates the output mode
 func (o OutputMode) IsValid() bool {
 	switch o {
-	case OutputModeOTLP, OutputModeConsole, OutputModeFile, OutputModeSlog:
+	case OutputModeConsole, OutputModeFile, OutputModeOTLP:
 		return true
 	default:
 		return false
@@ -79,10 +78,9 @@ type Provider interface {
 
 // OTelProviders holds all OpenTelemetry providers
 type OTelProviders struct {
-	tracer             *trace.TracerProvider
-	meter              *metric.MeterProvider
-	logger             *log.LoggerProvider
-	prometheusExporter *prometheus.Exporter
+	tracer *trace.TracerProvider
+	meter  *metric.MeterProvider
+	logger *log.LoggerProvider
 }
 
 // OTelOptions OpenTelemetry configuration
@@ -107,6 +105,7 @@ type OTelOptions struct {
 
 	// Prometheus integration
 	UsePrometheusEndpoint bool `json:"use-prometheus-endpoint,omitempty" mapstructure:"use-prometheus-endpoint"`
+	UserNativeSlog        bool `json:"user-native-slog,omitempty" mapstructure:"user-native-slog"`
 
 	// Logging configuration
 	Level     string `json:"level,omitempty" mapstructure:"level"`
@@ -142,7 +141,8 @@ func NewOTelOptions() *OTelOptions {
 		OutputDir:             "./otel-output",
 		Level:                 "info",
 		AddSource:             false,
-		UsePrometheusEndpoint: true,
+		UsePrometheusEndpoint: false,
+		UserNativeSlog:        false,
 		Slog:                  NewSlogOptions(),
 		providers:             &OTelProviders{},
 		files:                 make([]io.Closer, 0),
@@ -171,11 +171,6 @@ func (o *OTelOptions) Validate() []error {
 	// Validate slog options
 	if o.Slog != nil {
 		errs = append(errs, o.Slog.Validate()...)
-	}
-
-	// Skip other validations for slog mode
-	if o.OutputMode == OutputModeSlog {
-		return errs
 	}
 
 	// Validate output mode
@@ -229,6 +224,7 @@ func (o *OTelOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
 		o.UsePrometheusEndpoint,
 		"Enable Prometheus metrics endpoint (/metrics)",
 	)
+	fs.BoolVar(&o.UserNativeSlog, join(prefixes...)+"otel.user-native-slog", o.UserNativeSlog, "Use native slog library (bypass OpenTelemetry log pipeline)")
 
 	if o.Slog != nil {
 		prefixes = append(prefixes, "otel")
@@ -236,8 +232,8 @@ func (o *OTelOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
 	}
 }
 
-// getResource creates or returns cached resource configuration
-func (o *OTelOptions) getResource() *resource.Resource {
+// GetResource creates or returns cached resource configuration
+func (o *OTelOptions) GetResource() *resource.Resource {
 	resourceOnce.Do(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -272,33 +268,28 @@ func (o *OTelOptions) getResource() *resource.Resource {
 	return otelResource
 }
 
-// createWriter creates and manages file writers
-func (o *OTelOptions) createWriter(name string) (io.Writer, error) {
-	switch o.OutputMode {
-	case OutputModeConsole:
-		return os.Stdout, nil
-	case OutputModeFile:
-		if err := os.MkdirAll(o.OutputDir, 0o755); err != nil {
-			return nil, fmt.Errorf("failed to create output directory: %w", err)
-		}
-
-		filename := filepath.Join(o.OutputDir, name+".json")
-		file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create output file %s: %w", filename, err)
-		}
-
-		o.files = append(o.files, file)
-		return file, nil
-	default:
-		return os.Stdout, nil
+// createFileWriter creates and manages file writers
+func (o *OTelOptions) createFileWriter(name string) (io.Writer, error) {
+	if err := os.MkdirAll(o.OutputDir, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create output directory: %w", err)
 	}
+
+	filename := filepath.Join(o.OutputDir, name+".json")
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create output file %s: %w", filename, err)
+	}
+
+	o.files = append(o.files, file)
+	return file, nil
 }
 
 // initTraces initializes tracing
 func (o *OTelOptions) initTraces(ctx context.Context) error {
-	var exporter trace.SpanExporter
-	var err error
+	var (
+		exporter trace.SpanExporter
+		err      error
+	)
 
 	switch o.OutputMode {
 	case OutputModeOTLP:
@@ -309,12 +300,14 @@ func (o *OTelOptions) initTraces(ctx context.Context) error {
 			opts = append(opts, otlptracegrpc.WithInsecure())
 		}
 		exporter, err = otlptracegrpc.New(ctx, opts...)
-	default:
-		writer, writerErr := o.createWriter("traces")
+	case OutputModeFile:
+		writer, writerErr := o.createFileWriter("traces")
 		if writerErr != nil {
 			return fmt.Errorf("failed to create trace writer: %w", writerErr)
 		}
 		exporter, err = stdouttrace.New(stdouttrace.WithWriter(writer))
+	default: // OutputModeConsole and fallback
+		exporter, err = stdouttrace.New(stdouttrace.WithWriter(os.Stdout))
 	}
 
 	if err != nil {
@@ -323,7 +316,7 @@ func (o *OTelOptions) initTraces(ctx context.Context) error {
 
 	tp := trace.NewTracerProvider(
 		trace.WithBatcher(exporter),
-		trace.WithResource(o.getResource()),
+		trace.WithResource(o.GetResource()),
 		trace.WithSampler(trace.TraceIDRatioBased(o.SamplingRatio)),
 	)
 
@@ -339,14 +332,28 @@ func (o *OTelOptions) initTraces(ctx context.Context) error {
 
 // initMetrics initializes metrics
 func (o *OTelOptions) initMetrics(ctx context.Context) error {
-	reader, err := o.createMetricsReader(ctx)
+	var (
+		reader metric.Reader
+		err    error
+	)
+
+	if o.UsePrometheusEndpoint {
+		reader, err = prometheus.New()
+	} else {
+		exporter, exporterErr := o.createMetricsExporter(ctx)
+		if exporterErr != nil {
+			return fmt.Errorf("failed to create metrics exporter: %w", exporterErr)
+		}
+		reader = metric.NewPeriodicReader(exporter)
+	}
+
 	if err != nil {
-		return fmt.Errorf("failed to create metrics exporter: %w", err)
+		return fmt.Errorf("failed to create metrics reader: %w", err)
 	}
 
 	mp := metric.NewMeterProvider(
 		metric.WithReader(reader),
-		metric.WithResource(o.getResource()),
+		metric.WithResource(o.GetResource()),
 	)
 
 	o.providers.meter = mp
@@ -354,21 +361,7 @@ func (o *OTelOptions) initMetrics(ctx context.Context) error {
 	return nil
 }
 
-// createMetricsReader creates appropriate metrics reader based on configuration.
-func (o *OTelOptions) createMetricsReader(ctx context.Context) (metric.Reader, error) {
-	if o.UsePrometheusEndpoint {
-		return prometheus.New()
-	}
-
-	exporter, err := o.createMetricsExporter(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return metric.NewPeriodicReader(exporter), nil
-}
-
-// createMetricsExporter creates appropriate metrics exporter based on configuration.
+// createMetricsExporter creates metrics exporter based on output mode
 func (o *OTelOptions) createMetricsExporter(ctx context.Context) (metric.Exporter, error) {
 	switch o.OutputMode {
 	case OutputModeOTLP:
@@ -377,19 +370,27 @@ func (o *OTelOptions) createMetricsExporter(ctx context.Context) (metric.Exporte
 			opts = append(opts, otlpmetricgrpc.WithInsecure())
 		}
 		return otlpmetricgrpc.New(ctx, opts...)
-	default:
-		writer, err := o.createWriter("metrics")
+	case OutputModeFile:
+		writer, err := o.createFileWriter("metrics")
 		if err != nil {
 			return nil, fmt.Errorf("failed to create metrics writer: %w", err)
 		}
 		return stdoutmetric.New(stdoutmetric.WithWriter(writer))
+	default: // OutputModeConsole and fallback
+		return stdoutmetric.New(stdoutmetric.WithWriter(os.Stdout))
 	}
 }
 
 // initLogs initializes logging
 func (o *OTelOptions) initLogs(ctx context.Context) error {
-	var exporter log.Exporter
-	var err error
+	if o.UserNativeSlog {
+		return o.Slog.Apply()
+	}
+
+	var (
+		exporter log.Exporter
+		err      error
+	)
 
 	switch o.OutputMode {
 	case OutputModeOTLP:
@@ -400,12 +401,14 @@ func (o *OTelOptions) initLogs(ctx context.Context) error {
 			opts = append(opts, otlploggrpc.WithInsecure())
 		}
 		exporter, err = otlploggrpc.New(ctx, opts...)
-	default:
-		writer, writerErr := o.createWriter("logs")
+	case OutputModeFile:
+		writer, writerErr := o.createFileWriter("logs")
 		if writerErr != nil {
 			return fmt.Errorf("failed to create logs writer: %w", writerErr)
 		}
 		exporter, err = stdoutlog.New(stdoutlog.WithWriter(writer))
+	default: // OutputModeConsole and fallback
+		exporter, err = stdoutlog.New(stdoutlog.WithWriter(os.Stdout))
 	}
 
 	if err != nil {
@@ -421,7 +424,7 @@ func (o *OTelOptions) initLogs(ctx context.Context) error {
 
 	lp := log.NewLoggerProvider(
 		log.WithProcessor(processor),
-		log.WithResource(o.getResource()),
+		log.WithResource(o.GetResource()),
 	)
 
 	o.providers.logger = lp
@@ -459,11 +462,8 @@ func (o *OTelOptions) Apply() error {
 		return fmt.Errorf("failed to initialize metrics: %w", err)
 	}
 
-	switch o.OutputMode {
-	case OutputModeSlog:
-		return o.Slog.Apply()
-	default:
-		return o.initLogs(ctx)
+	if err := o.initLogs(ctx); err != nil {
+		return fmt.Errorf("failed to initialize logs: %w", err)
 	}
 
 	return nil
@@ -473,10 +473,6 @@ func (o *OTelOptions) Apply() error {
 func (o *OTelOptions) Shutdown(ctx context.Context) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-
-	if o.OutputMode == OutputModeSlog {
-		return nil
-	}
 
 	var errs []error
 
@@ -533,17 +529,3 @@ func (o *OTelOptions) GetLoggerProvider() *log.LoggerProvider {
 	defer o.mu.RUnlock()
 	return o.providers.logger
 }
-
-/*
-// GetPrometheusHandler returns an HTTP handler for Prometheus metrics.
-// Can be mounted directly on Gin, e.g.:
-//
-//	if h := opts.GetPrometheusHandler(); h != nil {
-//	    r.GET("/metrics", gin.WrapH(h))
-//	}
-func (o *OTelOptions) GetPrometheusHandler() http.Handler {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
-	return o.providers.prometheusExporter
-}
-*/

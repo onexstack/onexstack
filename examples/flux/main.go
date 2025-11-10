@@ -264,9 +264,9 @@ func example2BatchLoading() {
 		flux.WithMaxKeys[int, *Product](1000),
 		flux.WithTTL[int, *Product](10*time.Minute),
 		flux.WithLoader[int, *Product](productLoader),
-		flux.WithAsyncRefresh[int, *Product](2*time.Second),    // 启用异步刷新
-		flux.WithLoadTimeout[int, *Product](3*time.Second),     // 启用异步刷新
-		flux.WithRefreshMode[int, *Product](flux.RefreshBatch), // 批量刷新模式
+		flux.WithAsyncRefresh[int, *Product](2*time.Second),        // 启用异步刷新
+		flux.WithLoadTimeout[int, *Product](3*time.Second),         // 启用异步刷新
+		flux.WithRefreshMode[int, *Product](flux.RefreshModeBatch), // 批量刷新模式
 		flux.WithBatchSize[int, *Product](2),
 		flux.WithMaxConcurrency[int, *Product](2),
 	)
@@ -309,7 +309,7 @@ func example3FullLoading() {
 		flux.WithTTL[string, string](0), // 永不过期
 		flux.WithLoader[string, string](configLoader),
 		flux.WithAsyncRefresh[string, string](1*time.Minute),
-		flux.WithRefreshMode[string, string](flux.RefreshAuto), // 自动选择最佳刷新方式
+		flux.WithRefreshMode[string, string](flux.RefreshModeAuto), // 自动选择最佳刷新方式
 	)
 	if err != nil {
 		log.Fatalf("Failed to create config cache: %v", err)
@@ -341,14 +341,14 @@ func example4ConfigObject() {
 	userLoader := NewUserLoader()
 
 	// 方式1：使用 NewFluxConfig 创建默认配置后修改
-	config := flux.NewFluxFluxConfig[string, *User]()
+	config := flux.NewFluxConfig[string, *User]()
 	config.MaxKeys = 500
 	config.TTL = 15 * time.Minute
 	config.Loader = userLoader
 	config.LoadTimeout = 5 * time.Second
 	config.EnableAsync = true
 	config.RefreshInterval = 2 * time.Minute
-	config.RefreshMode = flux.RefreshSingle
+	config.RefreshMode = flux.RefreshModeSingle
 
 	userCache, err := flux.NewFlux(flux.WithConfig(config))
 	if err != nil {

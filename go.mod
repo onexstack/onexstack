@@ -29,7 +29,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/jinzhu/copier v0.4.0
 	github.com/kisielk/errcheck v1.8.0
-	github.com/maypok86/otter v1.2.4
+	github.com/maypok86/otter/v2 v2.2.1
 	github.com/nicksnyder/go-i18n/v2 v2.4.1
 	github.com/polarismesh/grpc-go-polaris v1.5.0
 	github.com/polarismesh/polaris-go v1.6.1
@@ -83,6 +83,7 @@ require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
+	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
@@ -99,11 +100,9 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dlclark/regexp2 v1.11.0 // indirect
-	github.com/dolthub/maphash v0.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.10 // indirect
-	github.com/gammazero/deque v0.2.1 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/glebarez/go-sqlite v1.20.3 // indirect
 	github.com/glebarez/sqlite v1.7.0 // indirect
@@ -150,7 +149,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mattn/go-sqlite3 v1.14.22 // indirect
-	github.com/maypok86/otter/v2 v2.2.1 // indirect
 	github.com/microsoft/go-mssqldb v1.6.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -198,6 +196,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.7.1 // indirect
 	go.uber.org/mock v0.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	go.uber.org/ratelimit v0.3.1 // indirect
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
 	golang.org/x/mod v0.29.0 // indirect
@@ -219,8 +218,9 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/polarismesh/polaris-go => /home/colin/workspace/golang/src/github.com/polarismesh/polaris-go
+replace (
+    github.com/polarismesh/polaris-go => /home/colin/workspace/golang/src/github.com/polarismesh/polaris-go
+	google.golang.org/grpc => google.golang.org/grpc v1.64.0 // To compatible with polarismesh/grpc-go-polaris
+	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin => /home/colin/workspace/golang/src/github.com/open-telemetry/opentelemetry-go-contrib/instrumentation/github.com/gin-gonic/gin/otelgin
+)
 
-replace google.golang.org/grpc => google.golang.org/grpc v1.64.0 // To compatible with polarismesh/grpc-go-polaris
-
-replace go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin => /home/colin/workspace/golang/src/github.com/open-telemetry/opentelemetry-go-contrib/instrumentation/github.com/gin-gonic/gin/otelgin

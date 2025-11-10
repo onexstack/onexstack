@@ -6,20 +6,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/onexstack/onexstack/pkg/binding"
 	"github.com/onexstack/onexstack/pkg/errorsx"
 )
 
-// Validator 是验证函数的类型，用于对绑定的数据结构进行验证.  
+// Validator 是验证函数的类型，用于对绑定的数据结构进行验证.
 type Validator[T any] func(context.Context, *T) error
 
-// Binder 定义绑定函数的类型，用于绑定请求数据到相应结构体.  
+// Binder 定义绑定函数的类型，用于绑定请求数据到相应结构体.
 type Binder func(any) error
 
-// Handler 是处理函数的类型，用于处理已经绑定和验证的数据.  
+// Handler 是处理函数的类型，用于处理已经绑定和验证的数据.
 type Handler[T any, R any] func(ctx context.Context, req *T) (R, error)
 
-// ErrorResponse 定义了错误响应的结构，  
-// 用于 API 请求中发生错误时返回统一的格式化错误信息.  
+// ErrorResponse 定义了错误响应的结构，
+// 用于 API 请求中发生错误时返回统一的格式化错误信息.
 type ErrorResponse struct {
 	// 错误原因，标识错误类型
 	Reason string `json:"reason,omitempty"`
@@ -27,6 +28,23 @@ type ErrorResponse struct {
 	Message string `json:"message,omitempty"`
 	// 附带的元数据信息
 	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
+// HandleAllRequest 是处理综合请求的快捷函数。
+// 它会将 URI 参数、Query/Form 参数、以及 JSON Body 一并绑定到结构体中，
+// 然后可选执行多个验证器，最后调用业务逻辑处理函数。
+func HandleAllRequest[T any, R any](c *gin.Context, handler Handler[T, R], validators ...Validator[T]) {
+	var request T
+
+	// 绑定和验证请求数据
+	if err := ShouldBindAll(c, &request, validators...); err != nil {
+		WriteResponse(c, nil, err)
+		return
+	}
+
+	// 调用实际的业务逻辑处理函数
+	response, err := handler(c.Request.Context(), &request)
+	WriteResponse(c, response, err)
 }
 
 // HandleJSONRequest 是处理 JSON 请求的快捷函数.
@@ -75,6 +93,21 @@ func ShouldBindUri[T any](c *gin.Context, rq *T, validators ...Validator[T]) err
 	return ReadRequest(c, rq, c.ShouldBindUri, validators...)
 }
 
+// ShouldBindAll 将 URI 参数、Query/Form 参数以及 JSON Body 一并绑定到结构体中。
+// 它能覆盖同名字段（后者优先），并支持 Default() 与验证函数 validators。
+func ShouldBindAll[T any](c *gin.Context, rq *T, validators ...Validator[T]) error {
+	if err := binding.Bind(c, rq, binding.URI, binding.JSON); err != nil {
+		return errorsx.ErrBind.WithMessage(err.Error())
+	}
+
+	// 应用 Default() 并执行验证逻辑
+	if err := FinalizeRequest(c, rq, validators...); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ReadRequest 是用于绑定和验证请求数据的通用工具函数.
 // - 它负责调用绑定函数绑定请求数据.
 // - 如果目标类型实现了 Default 接口，会调用其 Default 方法设置默认值.
@@ -85,14 +118,25 @@ func ReadRequest[T any](c *gin.Context, rq *T, binder Binder, validators ...Vali
 		return errorsx.ErrBind.WithMessage(err.Error())
 	}
 
-	// 如果数据结构实现了 Default 接口，则调用它的 Default 方法
+	if err := FinalizeRequest(c, rq, validators...); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// FinalizeRequest 在请求参数绑定完成后执行以下操作：
+// 1. 如果目标类型实现了 Default() 方法，则调用 Default 设置默认值；
+// 2. 顺序执行所有验证函数。
+func FinalizeRequest[T any](c *gin.Context, rq *T, validators ...Validator[T]) error {
+	// 应用默认值
 	if defaulter, ok := any(rq).(interface{ Default() }); ok {
 		defaulter.Default()
 	}
 
-	// 执行所有验证函数
+	// 执行验证逻辑
 	for _, validate := range validators {
-		if validate == nil { // 跳过 nil 的验证器
+		if validate == nil {
 			continue
 		}
 		if err := validate(c.Request.Context(), rq); err != nil {
@@ -117,6 +161,6 @@ func WriteResponse(c *gin.Context, data any, err error) {
 		return
 	}
 
-	// 如果没有错误，返回成功响应  
+	// 如果没有错误，返回成功响应
 	c.JSON(http.StatusOK, data)
 }

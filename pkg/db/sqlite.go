@@ -100,7 +100,7 @@ func NewInMemorySQLite() (*gorm.DB, error) {
 		// ?cache=shared is used to set SQLite's cache mode to shared cache mode.
 		// By default, each SQLite database connection has its own private cache. This mode is called private cache.
 		// Using shared cache mode allows different connections to share the same in-memory database and cache.
-		Database:              "file::memory:?cache=shared",
+		Database:              "file:onex:memory:?cache=shared",
 		MaxIdleConnections:    1,
 		MaxOpenConnections:    1,
 		MaxConnectionLifeTime: time.Hour,

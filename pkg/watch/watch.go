@@ -4,9 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -19,13 +22,6 @@ import (
 	"github.com/onexstack/onexstack/pkg/watch/registry"
 )
 
-var (
-	// Timeout duration for stopping jobs.
-	jobStopTimeout = 3 * time.Minute
-	// Default expiration time for locks.
-	defaultExpiration = 10 * time.Second
-)
-
 // Option configures a Watch instance with customizable settings.
 type Option func(w *Watch)
 
@@ -35,24 +31,34 @@ type Watch struct {
 	db *gorm.DB
 	// Job manager to handle scheduling and execution of jobs.
 	jm *manager.JobManager
-	// Maximum number of concurrent workers for each watcher.
-	maxWorkers int64
+	// Configuration options that control the watch system's runtime behavior.
+	options *Options
 	// Logger for logging events and errors.
 	logger Logger
-	// Distributed lock name to be used across instances.
-	lockName string
 	// Distributed lock instance.
 	locker distlock.Locker
-	// healthzPort is the port number for the health check endpoint.
-	healthzPort int
-	// List of watcher names that should be disabled.
-	disableWatchers []string
 	// Function for internal initialization of watchers.
 	initializer initializer.WatcherInitializer
 	// Function for external initialization of watchers.
 	externalInitializer initializer.WatcherInitializer
 	// autoMigrate indicates whether to automatically run database migrations during watcher initialization/startup.
 	autoMigrate bool
+}
+
+var (
+	// Timeout duration for stopping jobs.
+	jobStopTimeout = 3 * time.Minute
+	// Default expiration time for locks.
+	defaultExpiration = 10 * time.Second
+)
+
+// WithOptions returns an Option function that applies the provided Options to the Watch.
+func WithOptions(opts *Options) Option {
+	return func(w *Watch) {
+		if opts != nil {
+			w.options = opts
+		}
+	}
 }
 
 // WithInitialize returns an Option function that sets the provided WatcherInitializer
@@ -73,7 +79,56 @@ func WithLogger(logger Logger) Option {
 // WithAutoMigrate returns an Option that enables or disables automatic database migrations.
 func WithAutoMigrate(autoMigrate bool) Option {
 	return func(w *Watch) {
-		w.autoMigrate = w.autoMigrate
+		w.autoMigrate = autoMigrate
+	}
+}
+
+// WithLockName returns an Option function that sets the lock name for the Watch.
+func WithLockName(lockName string) Option {
+	return func(w *Watch) {
+		w.options.LockName = lockName
+	}
+}
+
+// WithHealthzPort returns an Option function that sets the health check port for the Watch.
+func WithHealthzPort(port int) Option {
+	return func(w *Watch) {
+		w.options.HealthzPort = port
+	}
+}
+
+// WithMetricsAddr returns an Option function that sets the metrics server address for the Watch.
+func WithMetricsAddr(addr string) Option {
+	return func(w *Watch) {
+		w.options.MetricsAddr = addr
+	}
+}
+
+// WithDisableWatchers returns an Option function that sets the list of disabled watchers for the Watch.
+func WithDisableWatchers(watchers []string) Option {
+	return func(w *Watch) {
+		w.options.DisableWatchers = watchers
+	}
+}
+
+// WithMaxWorkers returns an Option function that sets the maximum number of workers for the Watch.
+func WithMaxWorkers(maxWorkers int64) Option {
+	return func(w *Watch) {
+		w.options.MaxWorkers = maxWorkers
+	}
+}
+
+// WithWatchTimeout returns an Option function that sets the timeout duration for each individual watch execution.
+func WithWatchTimeout(timeout time.Duration) Option {
+	return func(w *Watch) {
+		w.options.WatchTimeout = timeout
+	}
+}
+
+// WithPerConcurrency returns an Option function that sets the maximum number of concurrent executions allowed for each individual watcher.
+func WithPerConcurrency(concurrency int) Option {
+	return func(w *Watch) {
+		w.options.PerConcurrency = concurrency
 	}
 }
 
@@ -83,12 +138,9 @@ func NewWatch(opts *Options, db *gorm.DB, withOptions ...Option) (*Watch, error)
 
 	// Create a new Watch with default settings.
 	w := &Watch{
-		lockName:        opts.LockName,
-		healthzPort:     opts.HealthzPort,
-		logger:          logger,
-		disableWatchers: opts.DisableWatchers,
-		db:              db,
-		maxWorkers:      opts.MaxWorkers,
+		options: opts,
+		logger:  logger,
+		db:      db,
 	}
 
 	// Apply user-defined options to the Watch.
@@ -104,7 +156,7 @@ func NewWatch(opts *Options, db *gorm.DB, withOptions ...Option) (*Watch, error)
 
 	// Initialize the job manager and the watcher initializer.
 	w.jm = manager.NewJobManager(manager.WithCron(runner))
-	w.initializer = initializer.NewInitializer(w.jm, w.maxWorkers)
+	w.initializer = initializer.NewInitializer(w.jm, w.options.MaxWorkers, w.options.WatchTimeout, w.options.PerConcurrency)
 
 	if err := w.addWatchers(); err != nil {
 		return nil, err
@@ -117,7 +169,7 @@ func NewWatch(opts *Options, db *gorm.DB, withOptions ...Option) (*Watch, error)
 // It skips the watchers that are specified in the disableWatchers slice.
 func (w *Watch) addWatchers() error {
 	for jobName, watcher := range registry.ListWatchers() {
-		if stringsutil.StringIn(jobName, w.disableWatchers) {
+		if stringsutil.StringIn(jobName, w.options.DisableWatchers) {
 			continue
 		}
 
@@ -131,7 +183,7 @@ func (w *Watch) addWatchers() error {
 			spec = obj.Spec()
 		}
 
-		if _, err := w.jm.AddJob(jobName, spec, watcher); err != nil {
+		if _, err := w.jm.Add(jobName, spec, watcher); err != nil {
 			w.logger.Error(err, "Failed to add job to the cron", "watcher", jobName)
 			return err
 		}
@@ -143,13 +195,17 @@ func (w *Watch) addWatchers() error {
 // Start attempts to acquire a distributed lock and starts the Cron job scheduler.
 // It retries acquiring the lock until successful.
 func (w *Watch) Start(stopCh <-chan struct{}) {
-	if w.healthzPort != 0 {
+	if w.options.HealthzPort != 0 {
 		go w.serveHealthz()
+	}
+
+	if w.options.MetricsAddr != "" {
+		go w.serveMetrics()
 	}
 
 	opts := []distlock.Option{
 		distlock.WithLockTimeout(defaultExpiration),
-		distlock.WithLockName(w.lockName),
+		distlock.WithLockName(w.options.LockName),
 		distlock.WithAutoMigrate(w.autoMigrate),
 	}
 	w.locker, _ = distlock.NewGORMLocker(w.db, opts...)
@@ -160,11 +216,11 @@ func (w *Watch) Start(stopCh <-chan struct{}) {
 		// Obtain a lock for our given mutex. After this is successful, no one else
 		// can obtain the same lock (the same mutex name) until we unlock it.
 		if err := w.locker.Lock(ctx); err == nil {
-			w.logger.Debug("Successfully acquired lock", "lockName", w.lockName)
+			w.logger.Debug("Successfully acquired lock", "lockName", w.options.LockName)
 			break
 		}
 
-		w.logger.Debug("Failed to acquire lock.", "lockName", w.lockName, "err", err)
+		w.logger.Debug("Failed to acquire lock.", "lockName", w.options.LockName, "error", err)
 		<-ticker.C
 	}
 
@@ -189,12 +245,23 @@ func (w *Watch) Stop() {
 	w.logger.Info("Successfully stopped watch server")
 }
 
+func (w *Watch) serveMetrics() {
+	r := gin.Default()
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	// You can change this port if needed (e.g. ":9090")
+	w.logger.Info("Start metrics server", "addr", w.options.MetricsAddr)
+	if err := r.Run(w.options.MetricsAddr); err != nil && err != http.ErrServerClosed {
+		w.logger.Error(err, "Failed to start metrics server")
+		os.Exit(1)
+	}
+}
+
 // serveHealthz starts the health check server for the Watch instance.
 func (w *Watch) serveHealthz() {
 	r := mux.NewRouter()
 	r.HandleFunc("/healthz", healthzHandler).Methods(http.MethodGet)
 
-	address := fmt.Sprintf("0.0.0.0:%d", w.healthzPort)
+	address := fmt.Sprintf("0.0.0.0:%d", w.options.HealthzPort)
 
 	if err := http.ListenAndServe(address, r); err != nil {
 		w.logger.Error(err, "Error serving health check endpoint")

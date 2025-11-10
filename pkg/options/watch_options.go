@@ -1,4 +1,4 @@
-package watch
+package options
 
 import (
 	"errors"
@@ -7,16 +7,16 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// Options structure holds the configuration options required to create and run a watch server.
-type Options struct {
+// Ensure interface
+var _ IOptions = (*WatchOptions)(nil)
+
+// WatchOptions structure holds the configuration options required to create and run a watch server.
+type WatchOptions struct {
 	// LockName specifies the name of the lock used by the server.
 	LockName string `json:"lock-name" mapstructure:"lock-name"`
 
 	// HealthzPort is the port number for the health check endpoint.
 	HealthzPort int `json:"healthz-port" mapstructure:"healthz-port"`
-
-	// MetricsAddr specifies the address (host:port) for the metrics server endpoint.
-	MetricsAddr string `json:"metrics-addr" mapstructure:"metrics-addr"`
 
 	// DisableWatchers is a slice of watchers that will be disabled when the server is run.
 	DisableWatchers []string `json:"disable-watchers" mapstructure:"disable-watchers"`
@@ -31,12 +31,11 @@ type Options struct {
 	PerConcurrency int `json:"per-watch-concurrency" mapstructure:"per-watch-concurrency"`
 }
 
-// NewOptions initializes and returns a new Options instance with default values.
-func NewOptions() *Options {
-	o := &Options{
+// NewWatchOptions initializes and returns a new WatchOptions instance with default values.
+func NewWatchOptions() *WatchOptions {
+	o := &WatchOptions{
 		LockName:        "default-distributed-watch-lock",
 		HealthzPort:     8881,
-		MetricsAddr:     ":9090",
 		DisableWatchers: []string{},
 		MaxWorkers:      1000,
 		WatchTimeout:    30 * time.Second,
@@ -46,17 +45,14 @@ func NewOptions() *Options {
 	return o
 }
 
-// AddFlags adds the command-line flags associated with the Options structure to the provided FlagSet.
+// AddFlags adds the command-line flags associated with the WatchOptions structure to the provided FlagSet.
 // This will allow users to configure the watch server via command-line arguments.
-func (o *Options) AddFlags(fs *pflag.FlagSet) {
+func (o *WatchOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
 	fs.StringVar(&o.LockName, "watch.lock-name", o.LockName,
 		"The name of the lock used by the server.")
 
 	fs.IntVar(&o.HealthzPort, "watch.healthz-port", o.HealthzPort,
 		"The port number for the health check endpoint.")
-
-	fs.StringVar(&o.MetricsAddr, "watch.metrics-addr", o.MetricsAddr,
-		"The address (host:port) for the metrics server endpoint.")
 
 	fs.StringSliceVar(&o.DisableWatchers, "watch.disable-watchers", o.DisableWatchers,
 		"The list of watchers that should be disabled.")
@@ -71,8 +67,8 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 		"The maximum number of concurrent executions allowed for each individual watcher.")
 }
 
-// Validate checks the Options structure for required configurations and returns a slice of errors.
-func (o *Options) Validate() []error {
+// Validate checks the WatchOptions structure for required configurations and returns a slice of errors.
+func (o *WatchOptions) Validate() []error {
 	errs := []error{}
 
 	// Validate LockName
@@ -81,8 +77,8 @@ func (o *Options) Validate() []error {
 	}
 
 	// Validate HealthzPort
-	if o.HealthzPort < 0 || o.HealthzPort > 65535 {
-		errs = append(errs, errors.New("healthz-port must be between 0 and 65535"))
+	if o.HealthzPort <= 0 || o.HealthzPort > 65535 {
+		errs = append(errs, errors.New("healthz-port must be between 1 and 65535"))
 	}
 
 	// Validate MaxWorkers

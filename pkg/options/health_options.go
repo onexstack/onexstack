@@ -8,13 +8,13 @@
 package options
 
 import (
+	"log/slog"
 	"net/http"
 	"net/http/pprof"
+	"os"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/pflag"
-
-	"github.com/onexstack/onexstack/pkg/log"
 )
 
 var _ IOptions = (*HealthOptions)(nil)
@@ -59,9 +59,10 @@ func (o *HealthOptions) ServeHealthCheck() {
 		r.HandleFunc("/debug/pprof/{_:.*}", pprof.Index)
 	}
 
-	log.Infow("Starting health check server", "path", o.HealthCheckPath, "addr", o.HealthCheckAddress)
+	slog.Info("Starting health check server", "path", o.HealthCheckPath, "addr", o.HealthCheckAddress)
 	if err := http.ListenAndServe(o.HealthCheckAddress, r); err != nil {
-		log.Fatalf("Error serving health check endpoint: %v", err)
+		slog.Error("Error serving health check endpoint", "error", err)
+		os.Exit(1)
 	}
 }
 

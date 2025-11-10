@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/mattn/go-sqlite3"
 	"gorm.io/gorm"
 
 	"github.com/onexstack/onexstack/pkg/logger"
@@ -172,6 +173,10 @@ func isDuplicateEntry(err error) bool {
 
 	if pgErr, ok := err.(*pgconn.PgError); ok {
 		return pgErr.Code == "23505" // PostgreSQL error code for unique violation
+	}
+
+	if pgErr, ok := err.(sqlite3.Error); ok {
+		return pgErr.Code == sqlite3.ErrConstraint
 	}
 
 	return false

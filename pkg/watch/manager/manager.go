@@ -39,8 +39,8 @@ func NewJobManager(opts ...Option) *JobManager {
 	return jm
 }
 
-// AddJob adds a new cron job to the manager.
-func (jm *JobManager) AddJob(jobName string, schedule string, cmd cron.Job) (cron.EntryID, error) {
+// Add adds a new cron job to the manager.
+func (jm *JobManager) Add(jobName string, schedule string, cmd cron.Job) (cron.EntryID, error) {
 	jm.mu.Lock()
 	defer jm.mu.Unlock()
 
@@ -60,8 +60,8 @@ func (jm *JobManager) AddJob(jobName string, schedule string, cmd cron.Job) (cro
 	return entryID, nil
 }
 
-// RemoveJob removes a specified cron job from the manager.
-func (jm *JobManager) RemoveJob(jobName string) error {
+// Del removes a specified cron job from the manager.
+func (jm *JobManager) Del(jobName string) error {
 	jm.mu.Lock()
 	defer jm.mu.Unlock()
 
@@ -74,11 +74,10 @@ func (jm *JobManager) RemoveJob(jobName string) error {
 	jm.cronScheduler.Remove(entryID)
 	delete(jm.jobs, jobName)
 	return nil
-
 }
 
-// UpdateJob updates a specified cron job with a new schedule and function.
-func (jm *JobManager) UpdateJob(jobName string, schedule string, cmd cron.Job) error {
+// Update updates a specified cron job with a new schedule and function.
+func (jm *JobManager) Update(jobName string, schedule string, cmd cron.Job) error {
 	jm.mu.Lock()
 	defer jm.mu.Unlock()
 
@@ -88,12 +87,12 @@ func (jm *JobManager) UpdateJob(jobName string, schedule string, cmd cron.Job) e
 	}
 
 	// Remove the existing job and add it again with new parameters
-	err := jm.RemoveJob(jobName)
+	err := jm.Del(jobName)
 	if err != nil {
 		return err
 	}
 
-	_, err = jm.AddJob(jobName, schedule, cmd)
+	_, err = jm.Add(jobName, schedule, cmd)
 	return err
 }
 
@@ -105,8 +104,8 @@ func (jm *JobManager) GetJobs() map[string]cron.EntryID {
 	return jm.jobs
 }
 
-// JobExists checks if a specific job exists in the manager.
-func (jm *JobManager) JobExists(jobName string) bool {
+// Exists checks if a specific job exists in the manager.
+func (jm *JobManager) Exists(jobName string) bool {
 	jm.mu.Lock()
 	defer jm.mu.Unlock()
 
