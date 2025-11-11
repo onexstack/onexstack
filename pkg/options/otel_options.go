@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	emptyexporter "github.com/onexstack/onexstack/pkg/otel/exporter/empty"
 	"github.com/spf13/pflag"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
@@ -28,18 +29,10 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 
 	"github.com/onexstack/onexstack/pkg/otelslog"
-	stringsutil "github.com/onexstack/onexstack/pkg/util/strings"
 )
 
 // Ensure interface
 var _ IOptions = (*OTelOptions)(nil)
-
-// Signal types
-const (
-	SignalTypeTrace  string = "traces"
-	SignalTypeMetric string = "metrics"
-	SignalTypeLog    string = "logs"
-)
 
 // OutputMode represents the output mode for OpenTelemetry data
 type OutputMode string
@@ -48,6 +41,7 @@ const (
 	OutputModeOTLP    OutputMode = "otel"    // Send to OpenTelemetry Collector
 	OutputModeFile    OutputMode = "file"    // Output to files
 	OutputModeConsole OutputMode = "console" // Output to standard output
+	OutputModeLegacy  OutputMode = "legacy"  // Use traditional metrics + logging (no OTel)
 )
 
 // String implements the Stringer interface
@@ -58,7 +52,7 @@ func (o OutputMode) String() string {
 // IsValid validates the output mode
 func (o OutputMode) IsValid() bool {
 	switch o {
-	case OutputModeConsole, OutputModeFile, OutputModeOTLP:
+	case OutputModeConsole, OutputModeFile, OutputModeOTLP, OutputModeLegacy:
 		return true
 	default:
 		return false
@@ -103,9 +97,6 @@ type OTelOptions struct {
 	ServiceInstanceID string `json:"service-instance-id,omitempty" mapstructure:"service-instance-id"`
 	Environment       string `json:"environment,omitempty" mapstructure:"environment"`
 
-	// Signal configuration
-	EnabledSignals []string `json:"enabled-signals,omitempty" mapstructure:"enabled-signals"`
-
 	// Behavior settings
 	SamplingRatio float64 `json:"sampling-ratio,omitempty" mapstructure:"sampling-ratio"`
 	WithResource  bool    `json:"with-resource,omitempty" mapstructure:"with-resource"`
@@ -113,10 +104,6 @@ type OTelOptions struct {
 	// Output configuration
 	OutputMode OutputMode `json:"output-mode,omitempty" mapstructure:"output-mode"`
 	OutputDir  string     `json:"output-dir,omitempty" mapstructure:"output-dir"`
-
-	// Prometheus integration
-	UsePrometheusEndpoint bool `json:"use-prometheus-endpoint,omitempty" mapstructure:"use-prometheus-endpoint"`
-	UserNativeSlog        bool `json:"user-native-slog,omitempty" mapstructure:"user-native-slog"`
 
 	// Logging configuration
 	Level     string `json:"level,omitempty" mapstructure:"level"`
@@ -140,44 +127,26 @@ var (
 func NewOTelOptions() *OTelOptions {
 	hostname, _ := os.Hostname()
 	opts := &OTelOptions{
-		ServiceName:           "unknown-service",
-		ServiceVersion:        "1.0.0",
-		ServiceInstanceID:     hostname,
-		Environment:           "development",
-		Endpoint:              "localhost:4317",
-		Insecure:              true,
-		WithResource:          false,
-		SamplingRatio:         1.0,
-		OutputMode:            OutputModeConsole,
-		OutputDir:             "./otel-output",
-		Level:                 "info",
-		AddSource:             false,
-		UsePrometheusEndpoint: false,
-		UserNativeSlog:        false,
-		EnabledSignals:        []string{"traces", "metrics", "logs"}, // Enable all signals by default
-		Slog:                  NewSlogOptions(),
-		providers:             &OTelProviders{},
-		files:                 make([]io.Closer, 0),
+		ServiceName:       "unknown-service",
+		ServiceVersion:    "1.0.0",
+		ServiceInstanceID: hostname,
+		Environment:       "development",
+		Endpoint:          "localhost:4317",
+		Insecure:          true,
+		WithResource:      false,
+		SamplingRatio:     1.0,
+		OutputMode:        OutputModeLegacy,
+		OutputDir:         "./otel-output",
+		Level:             "info",
+		AddSource:         false,
+		Slog:              NewSlogOptions(),
+		providers:         &OTelProviders{},
+		files:             make([]io.Closer, 0),
 	}
 
 	// Sync slog options
 	opts.syncSlogOptions()
 	return opts
-}
-
-// TraceEnabled returns true if trace signal is enabled
-func (o *OTelOptions) TraceEnabled() bool {
-	return stringsutil.StringIn(SignalTypeTrace, o.EnabledSignals)
-}
-
-// MetricEnabled returns true if metric signal is enabled
-func (o *OTelOptions) MetricEnabled() bool {
-	return stringsutil.StringIn(SignalTypeMetric, o.EnabledSignals)
-}
-
-// LogEnabled returns true if log signal is enabled
-func (o *OTelOptions) LogEnabled() bool {
-	return stringsutil.StringIn(SignalTypeLog, o.EnabledSignals)
 }
 
 // syncSlogOptions synchronizes slog options with main options
@@ -198,11 +167,6 @@ func (o *OTelOptions) Validate() []error {
 	// Validate slog options
 	if o.Slog != nil {
 		errs = append(errs, o.Slog.Validate()...)
-	}
-
-	// Validate enabled signals
-	if err := o.validateEnabledSignals(); err != nil {
-		errs = append(errs, err...)
 	}
 
 	// Validate output mode
@@ -250,22 +214,6 @@ func (o *OTelOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
 	fs.StringVar(&o.OutputDir, join(prefixes...)+"otel.output-dir", o.OutputDir, "Output directory for file mode")
 	fs.StringVar(&o.Level, join(prefixes...)+"otel.level", o.Level, "Log level: debug, info, warn, error")
 	fs.BoolVar(&o.AddSource, join(prefixes...)+"otel.add-source", o.AddSource, "Add source code position to logs")
-	fs.BoolVar(&o.UserNativeSlog, join(prefixes...)+"otel.user-native-slog", o.UserNativeSlog, "Use native slog library (bypass OpenTelemetry log pipeline)")
-	fs.BoolVar(
-		&o.UsePrometheusEndpoint,
-		join(prefixes...)+"otel.use-prometheus-endpoint",
-		o.UsePrometheusEndpoint,
-		"Enable Prometheus metrics endpoint (/metrics)",
-	)
-
-	// Add enabled signals flag
-	fs.StringSliceVar(
-		&o.EnabledSignals,
-		join(prefixes...)+"otel.enable-signals",
-		o.EnabledSignals,
-		"Comma-separated list of enabled signals: traces, metrics, logs (e.g., 'traces,metrics')",
-	)
-
 	if o.Slog != nil {
 		prefixes = append(prefixes, "otel")
 		o.Slog.AddFlags(fs, prefixes...)
@@ -332,6 +280,8 @@ func (o *OTelOptions) initTraces(ctx context.Context) error {
 	)
 
 	switch o.OutputMode {
+	case OutputModeLegacy:
+		exporter = emptyexporter.NewEmptyExporter()
 	case OutputModeOTLP:
 		opts := []otlptracegrpc.Option{
 			otlptracegrpc.WithEndpoint(o.Endpoint),
@@ -373,22 +323,36 @@ func (o *OTelOptions) initTraces(ctx context.Context) error {
 // initMetrics initializes metrics
 func (o *OTelOptions) initMetrics(ctx context.Context) error {
 	var (
-		reader metric.Reader
-		err    error
+		reader   metric.Reader
+		exporter metric.Exporter
+		err      error
 	)
 
-	if o.UsePrometheusEndpoint {
+	switch o.OutputMode {
+	case OutputModeLegacy:
 		reader, err = prometheus.New()
-	} else {
-		exporter, exporterErr := o.createMetricsExporter(ctx)
-		if exporterErr != nil {
-			return fmt.Errorf("failed to create metrics exporter: %w", exporterErr)
+	case OutputModeOTLP:
+		opts := []otlpmetricgrpc.Option{otlpmetricgrpc.WithEndpoint(o.Endpoint)}
+		if o.Insecure {
+			opts = append(opts, otlpmetricgrpc.WithInsecure())
 		}
-		reader = metric.NewPeriodicReader(exporter)
+		exporter, err = otlpmetricgrpc.New(ctx, opts...)
+	case OutputModeFile:
+		writer, err := o.createFileWriter("metrics")
+		if err != nil {
+			return fmt.Errorf("failed to create metrics writer: %w", err)
+		}
+		exporter, err = stdoutmetric.New(stdoutmetric.WithWriter(writer))
+	default: // OutputModeConsole and fallback
+		exporter, err = stdoutmetric.New(stdoutmetric.WithWriter(os.Stdout))
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to create metrics reader: %w", err)
+		return fmt.Errorf("failed to create metrics exporter: %w", err)
+	}
+
+	if exporter != nil {
+		reader = metric.NewPeriodicReader(exporter)
 	}
 
 	mp := metric.NewMeterProvider(
@@ -401,38 +365,16 @@ func (o *OTelOptions) initMetrics(ctx context.Context) error {
 	return nil
 }
 
-// createMetricsExporter creates metrics exporter based on output mode
-func (o *OTelOptions) createMetricsExporter(ctx context.Context) (metric.Exporter, error) {
-	switch o.OutputMode {
-	case OutputModeOTLP:
-		opts := []otlpmetricgrpc.Option{otlpmetricgrpc.WithEndpoint(o.Endpoint)}
-		if o.Insecure {
-			opts = append(opts, otlpmetricgrpc.WithInsecure())
-		}
-		return otlpmetricgrpc.New(ctx, opts...)
-	case OutputModeFile:
-		writer, err := o.createFileWriter("metrics")
-		if err != nil {
-			return nil, fmt.Errorf("failed to create metrics writer: %w", err)
-		}
-		return stdoutmetric.New(stdoutmetric.WithWriter(writer))
-	default: // OutputModeConsole and fallback
-		return stdoutmetric.New(stdoutmetric.WithWriter(os.Stdout))
-	}
-}
-
 // initLogs initializes logging
 func (o *OTelOptions) initLogs(ctx context.Context) error {
-	if o.UserNativeSlog {
-		return o.Slog.Apply()
-	}
-
 	var (
 		exporter log.Exporter
 		err      error
 	)
 
 	switch o.OutputMode {
+	case OutputModeLegacy:
+		return o.Slog.Apply()
 	case OutputModeOTLP:
 		opts := []otlploggrpc.Option{
 			otlploggrpc.WithEndpoint(o.Endpoint),
@@ -494,22 +436,16 @@ func (o *OTelOptions) Apply() error {
 	defer cancel()
 
 	// Initialize providers based on enabled signals
-	if o.TraceEnabled() {
-		if err := o.initTraces(ctx); err != nil {
-			return fmt.Errorf("failed to initialize traces: %w", err)
-		}
+	if err := o.initTraces(ctx); err != nil {
+		return fmt.Errorf("failed to initialize traces: %w", err)
 	}
 
-	if o.MetricEnabled() {
-		if err := o.initMetrics(ctx); err != nil {
-			return fmt.Errorf("failed to initialize metrics: %w", err)
-		}
+	if err := o.initMetrics(ctx); err != nil {
+		return fmt.Errorf("failed to initialize metrics: %w", err)
 	}
 
-	if o.LogEnabled() {
-		if err := o.initLogs(ctx); err != nil {
-			return fmt.Errorf("failed to initialize logs: %w", err)
-		}
+	if err := o.initLogs(ctx); err != nil {
+		return fmt.Errorf("failed to initialize logs: %w", err)
 	}
 
 	return nil
@@ -574,46 +510,4 @@ func (o *OTelOptions) GetLoggerProvider() *log.LoggerProvider {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	return o.providers.logger
-}
-
-// validateEnabledSignals validates the enabled signals configuration
-func (o *OTelOptions) validateEnabledSignals() []error {
-	var errs []error
-
-	// Check if signals slice is nil or empty
-	if len(o.EnabledSignals) == 0 {
-		errs = append(errs, fmt.Errorf("at least one signal must be enabled"))
-		return errs
-	}
-
-	// Valid signal types (supporting both singular and plural forms)
-	validSignals := map[string]struct{}{
-		"traces":  {},
-		"metrics": {},
-		"logs":    {},
-	}
-
-	// Track normalized signals to check for duplicates
-	var invalidSignals []string
-	for i, signal := range o.EnabledSignals {
-		// Check for empty signals
-		if signal == "" {
-			errs = append(errs, fmt.Errorf("enabled signal at index %d is empty", i))
-			continue
-		}
-
-		// Check if signal is valid
-		_, isValid := validSignals[signal]
-		if !isValid {
-			invalidSignals = append(invalidSignals, signal)
-			continue
-		}
-	}
-
-	// Report invalid signals
-	if len(invalidSignals) > 0 {
-		errs = append(errs, fmt.Errorf("invalid signal types: %v, valid options: traces, metrics, logs", invalidSignals))
-	}
-
-	return errs
 }
