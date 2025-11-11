@@ -28,10 +28,18 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 
 	"github.com/onexstack/onexstack/pkg/otelslog"
+	stringsutil "github.com/onexstack/onexstack/pkg/util/strings"
 )
 
 // Ensure interface
 var _ IOptions = (*OTelOptions)(nil)
+
+// Signal types
+const (
+	SignalTypeTrace  string = "traces"
+	SignalTypeMetric string = "metrics"
+	SignalTypeLog    string = "logs"
+)
 
 // OutputMode represents the output mode for OpenTelemetry data
 type OutputMode string
@@ -95,6 +103,9 @@ type OTelOptions struct {
 	ServiceInstanceID string `json:"service-instance-id,omitempty" mapstructure:"service-instance-id"`
 	Environment       string `json:"environment,omitempty" mapstructure:"environment"`
 
+	// Signal configuration
+	EnabledSignals []string `json:"enabled-signals,omitempty" mapstructure:"enabled-signals"`
+
 	// Behavior settings
 	SamplingRatio float64 `json:"sampling-ratio,omitempty" mapstructure:"sampling-ratio"`
 	WithResource  bool    `json:"with-resource,omitempty" mapstructure:"with-resource"`
@@ -143,6 +154,7 @@ func NewOTelOptions() *OTelOptions {
 		AddSource:             false,
 		UsePrometheusEndpoint: false,
 		UserNativeSlog:        false,
+		EnabledSignals:        []string{"traces", "metrics", "logs"}, // Enable all signals by default
 		Slog:                  NewSlogOptions(),
 		providers:             &OTelProviders{},
 		files:                 make([]io.Closer, 0),
@@ -151,6 +163,21 @@ func NewOTelOptions() *OTelOptions {
 	// Sync slog options
 	opts.syncSlogOptions()
 	return opts
+}
+
+// TraceEnabled returns true if trace signal is enabled
+func (o *OTelOptions) TraceEnabled() bool {
+	return stringsutil.StringIn(SignalTypeTrace, o.EnabledSignals)
+}
+
+// MetricEnabled returns true if metric signal is enabled
+func (o *OTelOptions) MetricEnabled() bool {
+	return stringsutil.StringIn(SignalTypeMetric, o.EnabledSignals)
+}
+
+// LogEnabled returns true if log signal is enabled
+func (o *OTelOptions) LogEnabled() bool {
+	return stringsutil.StringIn(SignalTypeLog, o.EnabledSignals)
 }
 
 // syncSlogOptions synchronizes slog options with main options
@@ -171,6 +198,11 @@ func (o *OTelOptions) Validate() []error {
 	// Validate slog options
 	if o.Slog != nil {
 		errs = append(errs, o.Slog.Validate()...)
+	}
+
+	// Validate enabled signals
+	if err := o.validateEnabledSignals(); err != nil {
+		errs = append(errs, err...)
 	}
 
 	// Validate output mode
@@ -218,13 +250,21 @@ func (o *OTelOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
 	fs.StringVar(&o.OutputDir, join(prefixes...)+"otel.output-dir", o.OutputDir, "Output directory for file mode")
 	fs.StringVar(&o.Level, join(prefixes...)+"otel.level", o.Level, "Log level: debug, info, warn, error")
 	fs.BoolVar(&o.AddSource, join(prefixes...)+"otel.add-source", o.AddSource, "Add source code position to logs")
+	fs.BoolVar(&o.UserNativeSlog, join(prefixes...)+"otel.user-native-slog", o.UserNativeSlog, "Use native slog library (bypass OpenTelemetry log pipeline)")
 	fs.BoolVar(
 		&o.UsePrometheusEndpoint,
 		join(prefixes...)+"otel.use-prometheus-endpoint",
 		o.UsePrometheusEndpoint,
 		"Enable Prometheus metrics endpoint (/metrics)",
 	)
-	fs.BoolVar(&o.UserNativeSlog, join(prefixes...)+"otel.user-native-slog", o.UserNativeSlog, "Use native slog library (bypass OpenTelemetry log pipeline)")
+
+	// Add enabled signals flag
+	fs.StringSliceVar(
+		&o.EnabledSignals,
+		join(prefixes...)+"otel.enable-signals",
+		o.EnabledSignals,
+		"Comma-separated list of enabled signals: traces, metrics, logs (e.g., 'traces,metrics')",
+	)
 
 	if o.Slog != nil {
 		prefixes = append(prefixes, "otel")
@@ -453,17 +493,23 @@ func (o *OTelOptions) Apply() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Initialize all providers
-	if err := o.initTraces(ctx); err != nil {
-		return fmt.Errorf("failed to initialize traces: %w", err)
+	// Initialize providers based on enabled signals
+	if o.TraceEnabled() {
+		if err := o.initTraces(ctx); err != nil {
+			return fmt.Errorf("failed to initialize traces: %w", err)
+		}
 	}
 
-	if err := o.initMetrics(ctx); err != nil {
-		return fmt.Errorf("failed to initialize metrics: %w", err)
+	if o.MetricEnabled() {
+		if err := o.initMetrics(ctx); err != nil {
+			return fmt.Errorf("failed to initialize metrics: %w", err)
+		}
 	}
 
-	if err := o.initLogs(ctx); err != nil {
-		return fmt.Errorf("failed to initialize logs: %w", err)
+	if o.LogEnabled() {
+		if err := o.initLogs(ctx); err != nil {
+			return fmt.Errorf("failed to initialize logs: %w", err)
+		}
 	}
 
 	return nil
@@ -528,4 +574,46 @@ func (o *OTelOptions) GetLoggerProvider() *log.LoggerProvider {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 	return o.providers.logger
+}
+
+// validateEnabledSignals validates the enabled signals configuration
+func (o *OTelOptions) validateEnabledSignals() []error {
+	var errs []error
+
+	// Check if signals slice is nil or empty
+	if len(o.EnabledSignals) == 0 {
+		errs = append(errs, fmt.Errorf("at least one signal must be enabled"))
+		return errs
+	}
+
+	// Valid signal types (supporting both singular and plural forms)
+	validSignals := map[string]struct{}{
+		"traces":  {},
+		"metrics": {},
+		"logs":    {},
+	}
+
+	// Track normalized signals to check for duplicates
+	var invalidSignals []string
+	for i, signal := range o.EnabledSignals {
+		// Check for empty signals
+		if signal == "" {
+			errs = append(errs, fmt.Errorf("enabled signal at index %d is empty", i))
+			continue
+		}
+
+		// Check if signal is valid
+		_, isValid := validSignals[signal]
+		if !isValid {
+			invalidSignals = append(invalidSignals, signal)
+			continue
+		}
+	}
+
+	// Report invalid signals
+	if len(invalidSignals) > 0 {
+		errs = append(errs, fmt.Errorf("invalid signal types: %v, valid options: traces, metrics, logs", invalidSignals))
+	}
+
+	return errs
 }
