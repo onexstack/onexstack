@@ -63,10 +63,11 @@ func Observability(opts ...Option) grpc.UnaryServerInterceptor {
 		md, _ := metadata.FromIncomingContext(ctx)
 		md = injectTraceMetadata(ctx, md, spanCtx, cfg)
 		ctx = metadata.NewIncomingContext(ctx, md)
+		isDebugLevel := isDebugEnabled()
 
 		// Optional: capture request payload
 		var requestBody string
-		if isDebugEnabled() && req != nil {
+		if isDebugLevel && req != nil {
 			data, _ := json.Marshal(req)
 			requestBody = string(data)
 		}
@@ -76,7 +77,7 @@ func Observability(opts ...Option) grpc.UnaryServerInterceptor {
 
 		// Optional: capture response payload
 		var responseBody string
-		if isDebugEnabled() && resp != nil {
+		if isDebugLevel && resp != nil {
 			data, _ := json.Marshal(resp)
 			responseBody = string(data)
 		}
@@ -104,7 +105,7 @@ func Observability(opts ...Option) grpc.UnaryServerInterceptor {
 			},
 		}
 
-		if isDebugEnabled() {
+		if isDebugLevel {
 			rpcData["request"] = map[string]any{
 				"body": map[string]any{
 					"content": requestBody,
@@ -119,7 +120,12 @@ func Observability(opts ...Option) grpc.UnaryServerInterceptor {
 			}
 		}
 
-		slog.InfoContext(ctx, "gRPC request completed",
+		logLevel := slog.LevelInfo
+		if isDebugLevel {
+			logLevel = slog.LevelDebug
+		}
+
+		slog.Log(ctx, logLevel, "gRPC request completed",
 			"duration_sec", duration,
 			"source", map[string]any{"ip": clientIP},
 			"rpc", rpcData,

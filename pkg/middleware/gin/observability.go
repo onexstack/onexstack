@@ -47,8 +47,6 @@ type ObservabilityOptions struct {
 	TraceInjectionMode TraceInjectionMode
 	CustomTraceHeader  string   // Custom header name for trace ID
 	SkipPaths          []string // Paths to skip logging (supports wildcards)
-	SkipLogging        bool     // Skip logging entirely for matched requests
-	SkipTracing        bool     // Skip tracing for matched requests
 }
 
 // Option is a functional option for configuring the middleware
@@ -99,28 +97,12 @@ func WithSkipMetrics() Option {
 	}
 }
 
-// WithSkipLogging configures whether to skip logging for matched paths
-func WithSkipLogging(skip bool) Option {
-	return func(o *ObservabilityOptions) {
-		o.SkipLogging = skip
-	}
-}
-
-// WithSkipTracing configures whether to skip tracing for matched paths
-func WithSkipTracing(skip bool) Option {
-	return func(o *ObservabilityOptions) {
-		o.SkipTracing = skip
-	}
-}
-
 // Observability middleware with configurable trace injection
 func Observability(opts ...Option) gin.HandlerFunc {
 	// Default configuration
 	config := &ObservabilityOptions{
 		TraceInjectionMode: InjectTraceIDOnly,
 		SkipPaths:          []string{"/metrics"}, // Default skip /metrics
-		SkipLogging:        true,                 // Skip logging by default for matched paths
-		SkipTracing:        false,                // Keep tracing by default
 	}
 
 	// Apply options
@@ -134,39 +116,36 @@ func Observability(opts ...Option) gin.HandlerFunc {
 
 		// Check if this request should be skipped
 		shouldSkip := shouldSkipPath(c.Request.URL.Path, c.Request.Method, config.SkipPaths)
+		if shouldSkip {
+			c.Next()
+			return
+		}
 
 		// Extract trace information early
 		span := trace.SpanFromContext(ctx)
 		spanCtx := span.SpanContext()
 
 		// Inject trace headers based on configuration (unless skipping tracing)
-		if !shouldSkip || !config.SkipTracing {
-			injectTraceHeaders(c, spanCtx, config)
-		}
+		injectTraceHeaders(c, spanCtx, config)
 
 		var requestBody string
 		var responseBuffer bytes.Buffer
 
 		// Only capture body if we're going to log and debug is enabled
-		captureBody := (!shouldSkip || !config.SkipLogging) && isDebugEnabled()
+		isDebugLevel := isDebugEnabled()
 
-		if captureBody && c.Request.Body != nil {
+		if isDebugLevel && c.Request.Body != nil {
 			bodyBytes, _ := io.ReadAll(c.Request.Body)
 			requestBody = string(bodyBytes)
 			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		}
 
-		if captureBody {
+		if isDebugLevel {
 			writer := &bodyCaptureWriter{ResponseWriter: c.Writer, body: &responseBuffer}
 			c.Writer = writer
 		}
 
 		c.Next()
-
-		// Skip logging if configured to do so for this path
-		if shouldSkip && config.SkipLogging {
-			return
-		}
 
 		duration := time.Since(start).Seconds()
 
@@ -182,7 +161,7 @@ func Observability(opts ...Option) gin.HandlerFunc {
 			},
 		}
 
-		if captureBody {
+		if isDebugLevel {
 			httpData["request"].(map[string]any)["body"] = map[string]any{
 				"content": requestBody,
 				"bytes":   len(requestBody),
@@ -194,16 +173,12 @@ func Observability(opts ...Option) gin.HandlerFunc {
 			}
 		}
 
-		// Use different log level for skipped paths (if still logging)
 		logLevel := slog.LevelInfo
-		message := "HTTP request completed"
-
-		if shouldSkip {
+		if isDebugLevel {
 			logLevel = slog.LevelDebug
-			message = "HTTP request completed (monitoring endpoint)"
 		}
 
-		slog.Log(ctx, logLevel, message,
+		slog.Log(ctx, logLevel, "HTTP request completed",
 			"duration_sec", duration,
 			"source", map[string]any{"ip": c.ClientIP()},
 			"http", httpData,
