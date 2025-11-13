@@ -33,6 +33,7 @@ require (
 	github.com/nicksnyder/go-i18n/v2 v2.4.1
 	github.com/polarismesh/grpc-go-polaris v1.5.0
 	github.com/polarismesh/polaris-go v1.6.1
+	github.com/prometheus/client_golang v1.23.0
 	github.com/redis/go-redis/extra/rediscensus/v9 v9.7.0
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/robfig/cron/v3 v3.0.1
@@ -59,6 +60,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
 	go.uber.org/automaxprocs v1.6.0
+	go.uber.org/ratelimit v0.3.1
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.43.0
 	golang.org/x/text v0.30.0
@@ -163,7 +165,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/polarismesh/specification v1.5.5-alpha.1 // indirect
-	github.com/prometheus/client_golang v1.23.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.65.0 // indirect
 	github.com/prometheus/otlptranslator v0.0.2 // indirect
@@ -196,7 +197,6 @@ require (
 	go.opentelemetry.io/proto/otlp v1.7.1 // indirect
 	go.uber.org/mock v0.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/ratelimit v0.3.1 // indirect
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
 	golang.org/x/mod v0.29.0 // indirect
@@ -219,8 +219,7 @@ require (
 )
 
 replace (
-    github.com/polarismesh/polaris-go => /home/colin/workspace/golang/src/github.com/polarismesh/polaris-go
-	google.golang.org/grpc => google.golang.org/grpc v1.64.0 // To compatible with polarismesh/grpc-go-polaris
+	github.com/polarismesh/polaris-go => /home/colin/workspace/golang/src/github.com/polarismesh/polaris-go
 	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin => /home/colin/workspace/golang/src/github.com/open-telemetry/opentelemetry-go-contrib/instrumentation/github.com/gin-gonic/gin/otelgin
+	google.golang.org/grpc => google.golang.org/grpc v1.64.0 // To compatible with polarismesh/grpc-go-polaris
 )
-
