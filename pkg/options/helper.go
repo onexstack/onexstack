@@ -23,7 +23,7 @@ const (
 	TiB
 )
 
-func join(prefixes ...string) string {
+func Join(prefixes ...string) string {
 	joined := strings.Join(prefixes, ".")
 	if joined != "" {
 		joined += "."

@@ -72,14 +72,14 @@ func (o *SlogOptions) Validate() []error {
 }
 
 // AddFlags adds command line flags for the configuration.
-func (o *SlogOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	fs.StringVar(&o.Level, join(prefixes...)+"slog.level", o.Level, "Sets the log level. Permitted levels: debug, info, warn, error.")
-	fs.StringVar(&o.Format, join(prefixes...)+"slog.format", o.Format, "Sets the log format. Permitted formats: json, text.")
-	fs.BoolVar(&o.AddSource, join(prefixes...)+"slog.add-source", o.AddSource, "Add source file:line to log records.")
-	fs.StringVar(&o.TimeFormat, join(prefixes...)+"slog.time-format", o.TimeFormat, ""+
+func (o *SlogOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	fs.StringVar(&o.Level, fullPrefix+".level", o.Level, "Sets the log level. Permitted levels: debug, info, warn, error.")
+	fs.StringVar(&o.Format, fullPrefix+".format", o.Format, "Sets the log format. Permitted formats: json, text.")
+	fs.BoolVar(&o.AddSource, fullPrefix+".add-source", o.AddSource, "Add source file:line to log records.")
+	fs.StringVar(&o.TimeFormat, fullPrefix+".time-format", o.TimeFormat, ""+
 		"Time format for text logs using Go's time layout format. Leave empty for RFC3339. "+
 		"Examples: '2006-01-02 15:04:05'")
-	fs.StringVar(&o.Output, join(prefixes...)+"slog.output", o.Output, "Log output destination (stdout, stderr, or file path).")
+	fs.StringVar(&o.Output, fullPrefix+".output", o.Output, "Log output destination (stdout, stderr, or file path).")
 }
 
 // ToSlogLevel converts string level to slog.Level.

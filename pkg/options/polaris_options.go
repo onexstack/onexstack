@@ -78,21 +78,21 @@ func (o *PolarisOptions) Validate() []error {
 }
 
 // AddFlags adds flags related to Polaris service to the specified FlagSet.
-func (o *PolarisOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&o.Addr, "polaris.addr", o.Addr, "Address of your Polaris service(ip:port).")
-	fs.DurationVar(&o.Timeout, "polaris.timeout", o.Timeout, "Query timeout per request.")
-	fs.IntVar(&o.RetryCount, "polaris.retry-count", o.RetryCount, "Number of retries")
+func (o *PolarisOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	fs.StringVar(&o.Addr, fullPrefix+".addr", o.Addr, "Address of your Polaris service(ip:port).")
+	fs.DurationVar(&o.Timeout, fullPrefix+".timeout", o.Timeout, "Query timeout per request.")
+	fs.IntVar(&o.RetryCount, fullPrefix+".retry-count", o.RetryCount, "Number of retries")
 
 	// required
-	fs.StringVar(&o.Provider.Service, "polaris.provider.service", o.Provider.Service, "Service name.")
-	fs.StringVar(&o.Provider.Namespace, "polaris.provider.namespace", o.Provider.Namespace, "Namespace.")
-	fs.StringVar(&o.Provider.Host, "polaris.provider.host", o.Provider.Host, "Service instance host (IPv4/IPv6).")
-	fs.IntVar(&o.Provider.Port, "polaris.provider.port", o.Provider.Port, "Service instance port.")
+	fs.StringVar(&o.Provider.Service, fullPrefix+".provider.service", o.Provider.Service, "Service name.")
+	fs.StringVar(&o.Provider.Namespace, fullPrefix+".provider.namespace", o.Provider.Namespace, "Namespace.")
+	fs.StringVar(&o.Provider.Host, fullPrefix+".provider.host", o.Provider.Host, "Service instance host (IPv4/IPv6).")
+	fs.IntVar(&o.Provider.Port, fullPrefix+".provider.port", o.Provider.Port, "Service instance port.")
 
 	// optional scalar
-	fs.StringVar(&o.Provider.Token, "polaris.provider.token", o.Provider.Token, "Service access token.")
-	// fs.StringVar(&o.InstanceID, "polaris.instance-id", o.InstanceID, "Optional: specify instance id.")
-	fs.BoolVar(&o.Provider.Heartbeat, "polaris.provider.heartbeat", o.Provider.Heartbeat, "Let SDK handle heartbeat automatically.")
+	fs.StringVar(&o.Provider.Token, fullPrefix+".provider.token", o.Provider.Token, "Service access token.")
+	// fs.StringVar(&o.InstanceID, fullPrefix+".instance-id", o.InstanceID, "Optional: specify instance id.")
+	fs.BoolVar(&o.Provider.Heartbeat, fullPrefix+".provider.heartbeat", o.Provider.Heartbeat, "Let SDK handle heartbeat automatically.")
 
 	// optional pointer-like with has-flags
 	// fs.BoolVar(&o.HasProtocol, p+".has-protocol", o.HasProtocol, "Optional: set true to apply --"+p+".protocol.")
@@ -105,16 +105,16 @@ func (o *PolarisOptions) AddFlags(fs *pflag.FlagSet) {
 	// fs.IntVar(&o.Priority, p+".priority", o.Priority, "Optional: priority (smaller is higher); effective only if --"+p+".has-priority=true.")
 
 	// fs.BoolVar(&o.HasVersion, p+".has-version", o.HasVersion, "Optional: set true to apply --"+p+".version.")
-	fs.StringVar(&o.Provider.Version, "polaris.provider.version", o.Provider.Version, "Service version.")
+	fs.StringVar(&o.Provider.Version, fullPrefix+".provider.version", o.Provider.Version, "Service version.")
 
 	// fs.BoolVar(&o.HasHealthy, p+".has-healthy", o.HasHealthy, "Optional: set true to apply --"+p+".healthy.")
-	fs.BoolVar(&o.Provider.Healthy, "polaris.provider.healthy", o.Provider.Healthy, "To show service is healthy or not.")
+	fs.BoolVar(&o.Provider.Healthy, fullPrefix+".provider.healthy", o.Provider.Healthy, "To show service is healthy or not.")
 
 	// fs.BoolVar(&o.HasIsolate, p+".has-isolate", o.HasIsolate, "Optional: set true to apply --"+p+".isolate.")
 	// fs.BoolVar(&o.Isolate, p+".isolate", o.Isolate, "Optional: is instance isolated; effective only if --"+p+".has-isolate=true.")
 
 	// fs.BoolVar(&o.HasTTL, p+".has-ttl", o.HasTTL, "Optional: set true to apply --"+p+".ttl.")
-	fs.IntVar(&o.Provider.TTL, "polaris.provider.ttl", o.Provider.TTL,
+	fs.IntVar(&o.Provider.TTL, fullPrefix+".provider.ttl", o.Provider.TTL,
 		"TTL timeout. if node needs to use heartbeat to report, required. If not set,server will throw ErrorCode-400141")
 
 	// fs.BoolVar(&o.HasTimeout, p+".has-timeout", o.HasTimeout, "Optional: set true to apply --"+p+".timeout.")

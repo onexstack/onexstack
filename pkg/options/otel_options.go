@@ -201,22 +201,21 @@ func (o *OTelOptions) Validate() []error {
 }
 
 // AddFlags adds command line flags
-func (o *OTelOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	fs.StringVar(&o.ServiceName, join(prefixes...)+"otel.service-name", o.ServiceName, "Service name")
-	fs.StringVar(&o.ServiceVersion, join(prefixes...)+"otel.service-version", o.ServiceVersion, "Service version")
-	fs.StringVar(&o.ServiceInstanceID, join(prefixes...)+"otel.service-instance-id", o.ServiceInstanceID, "Service instance ID (auto-generated if empty)")
-	fs.StringVar(&o.Environment, join(prefixes...)+"otel.environment", o.Environment, "Environment")
-	fs.StringVar(&o.Endpoint, join(prefixes...)+"otel.endpoint", o.Endpoint, "OTLP endpoint")
-	fs.BoolVar(&o.Insecure, join(prefixes...)+"otel.insecure", o.Insecure, "Use insecure connection")
-	fs.Float64Var(&o.SamplingRatio, join(prefixes...)+"otel.sampling-ratio", o.SamplingRatio, "Sampling ratio (0.0-1.0)")
-	fs.BoolVar(&o.WithResource, join(prefixes...)+"otel.with-resource", o.WithResource, "Include system resource information")
-	fs.Var((*outputModeFlag)(&o.OutputMode), join(prefixes...)+"otel.output-mode", "Output mode: otlp, console, file, slog")
-	fs.StringVar(&o.OutputDir, join(prefixes...)+"otel.output-dir", o.OutputDir, "Output directory for file mode")
-	fs.StringVar(&o.Level, join(prefixes...)+"otel.level", o.Level, "Log level: debug, info, warn, error")
-	fs.BoolVar(&o.AddSource, join(prefixes...)+"otel.add-source", o.AddSource, "Add source code position to logs")
+func (o *OTelOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	fs.StringVar(&o.ServiceName, fullPrefix+".service-name", o.ServiceName, "Service name")
+	fs.StringVar(&o.ServiceVersion, fullPrefix+".service-version", o.ServiceVersion, "Service version")
+	fs.StringVar(&o.ServiceInstanceID, fullPrefix+".service-instance-id", o.ServiceInstanceID, "Service instance ID (auto-generated if empty)")
+	fs.StringVar(&o.Environment, fullPrefix+".environment", o.Environment, "Environment")
+	fs.StringVar(&o.Endpoint, fullPrefix+".endpoint", o.Endpoint, "OTLP endpoint")
+	fs.BoolVar(&o.Insecure, fullPrefix+".insecure", o.Insecure, "Use insecure connection")
+	fs.Float64Var(&o.SamplingRatio, fullPrefix+".sampling-ratio", o.SamplingRatio, "Sampling ratio (0.0-1.0)")
+	fs.BoolVar(&o.WithResource, fullPrefix+".with-resource", o.WithResource, "Include system resource information")
+	fs.Var((*outputModeFlag)(&o.OutputMode), fullPrefix+".output-mode", "Output mode: otlp, console, file, slog")
+	fs.StringVar(&o.OutputDir, fullPrefix+".output-dir", o.OutputDir, "Output directory for file mode")
+	fs.StringVar(&o.Level, fullPrefix+".level", o.Level, "Log level: debug, info, warn, error")
+	fs.BoolVar(&o.AddSource, fullPrefix+".add-source", o.AddSource, "Add source code position to logs")
 	if o.Slog != nil {
-		prefixes = append(prefixes, "otel")
-		o.Slog.AddFlags(fs, prefixes...)
+		o.Slog.AddFlags(fs, fullPrefix)
 	}
 }
 

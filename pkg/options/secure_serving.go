@@ -25,6 +25,8 @@ type SecureServingOptions struct {
 	// ServerCert is the TLS cert info for serving secure traffic
 	ServerCert GeneratableKeyCert `json:"tls"`
 	// AdvertiseAddress net.IP
+
+	fullPrefix string
 }
 
 // CertKey contains configuration items related to certificate.
@@ -72,9 +74,9 @@ func (s *SecureServingOptions) Validate() []error {
 	errors := []error{}
 
 	if s.Required && s.BindPort < 1 || s.BindPort > 65535 {
-		errors = append(errors, fmt.Errorf("--secure.bind-port %v must be between 1 and 65535, inclusive. It cannot be turned off with 0", s.BindPort))
+		errors = append(errors, fmt.Errorf("--"+s.fullPrefix+".bind-port %v must be between 1 and 65535, inclusive. It cannot be turned off with 0", s.BindPort))
 	} else if s.BindPort < 0 || s.BindPort > 65535 {
-		errors = append(errors, fmt.Errorf("--secure.bind-port %v must be between 0 and 65535, inclusive. 0 for turning off secure port", s.BindPort))
+		errors = append(errors, fmt.Errorf("--"+s.fullPrefix+".bind-port %v must be between 0 and 65535, inclusive. 0 for turning off secure port", s.BindPort))
 	}
 
 	return errors
@@ -82,9 +84,9 @@ func (s *SecureServingOptions) Validate() []error {
 
 // AddFlags adds flags related to HTTPS server for a specific APIServer to the
 // specified FlagSet.
-func (s *SecureServingOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	fs.StringVar(&s.BindAddress, "secure.bind-address", s.BindAddress, ""+
-		"The IP address on which to listen for the --secure.bind-port port. The "+
+func (s *SecureServingOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	fs.StringVar(&s.BindAddress, fullPrefix+".bind-address", s.BindAddress, ""+
+		"The IP address on which to listen for the --"+fullPrefix+".bind-port port. The "+
 		"associated interface(s) must be reachable by the rest of the engine, and by CLI/web "+
 		"clients. If blank, all interfaces will be used (0.0.0.0 for all IPv4 interfaces and :: for all IPv6 interfaces).")
 	desc := "The port on which to serve HTTPS with authentication and authorization."
@@ -93,24 +95,24 @@ func (s *SecureServingOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
 	} else {
 		desc += " If 0, don't serve HTTPS at all."
 	}
-	fs.IntVar(&s.BindPort, "secure.bind-port", s.BindPort, desc)
+	fs.IntVar(&s.BindPort, fullPrefix+".bind-port", s.BindPort, desc)
 
-	fs.StringVar(&s.ServerCert.CertDirectory, "secure.tls.cert-dir", s.ServerCert.CertDirectory, ""+
+	fs.StringVar(&s.ServerCert.CertDirectory, fullPrefix+".tls.cert-dir", s.ServerCert.CertDirectory, ""+
 		"The directory where the TLS certs are located. "+
-		"If --secure.tls.cert-key.cert-file and --secure.tls.cert-key.private-key-file are provided, "+
+		"If --"+fullPrefix+".tls.cert-key.cert-file and --"+fullPrefix+".tls.cert-key.private-key-file are provided, "+
 		"this flag will be ignored.")
 
-	fs.StringVar(&s.ServerCert.PairName, "secure.tls.pair-name", s.ServerCert.PairName, ""+
-		"The name which will be used with --secure.tls.cert-dir to make a cert and key filenames. "+
+	fs.StringVar(&s.ServerCert.PairName, fullPrefix+".tls.pair-name", s.ServerCert.PairName, ""+
+		"The name which will be used with --"+fullPrefix+".tls.cert-dir to make a cert and key filenames. "+
 		"It becomes <cert-dir>/<pair-name>.crt and <cert-dir>/<pair-name>.key")
 
-	fs.StringVar(&s.ServerCert.CertKey.CertFile, "secure.tls.cert-key.cert-file", s.ServerCert.CertKey.CertFile, ""+
+	fs.StringVar(&s.ServerCert.CertKey.CertFile, fullPrefix+".tls.cert-key.cert-file", s.ServerCert.CertKey.CertFile, ""+
 		"File containing the default x509 Certificate for HTTPS. (CA cert, if any, concatenated "+
 		"after server cert).")
 
-	fs.StringVar(&s.ServerCert.CertKey.KeyFile, "secure.tls.cert-key.private-key-file",
+	fs.StringVar(&s.ServerCert.CertKey.KeyFile, fullPrefix+".tls.cert-key.private-key-file",
 		s.ServerCert.CertKey.KeyFile, ""+
-			"File containing the default x509 private key matching --secure.tls.cert-key.cert-file.")
+			"File containing the default x509 private key matching --"+fullPrefix+".tls.cert-key.cert-file.")
 }
 
 // Complete fills in any fields not set that are required to have valid data.
@@ -126,7 +128,7 @@ func (s *SecureServingOptions) Complete() error {
 
 	if len(s.ServerCert.CertDirectory) > 0 {
 		if len(s.ServerCert.PairName) == 0 {
-			return fmt.Errorf("--secure.tls.pair-name is required if --secure.tls.cert-dir is set")
+			return fmt.Errorf("--" + s.fullPrefix + ".tls.pair-name is required if --" + s.fullPrefix + ".tls.cert-dir is set")
 		}
 		keyCert.CertFile = path.Join(s.ServerCert.CertDirectory, s.ServerCert.PairName+".crt")
 		keyCert.KeyFile = path.Join(s.ServerCert.CertDirectory, s.ServerCert.PairName+".key")

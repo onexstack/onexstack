@@ -22,6 +22,8 @@ type JWTOptions struct {
 	Expired       time.Duration `json:"expired" mapstructure:"expired"`
 	MaxRefresh    time.Duration `json:"max-refresh" mapstructure:"max-refresh"`
 	SigningMethod string        `json:"signing-method" mapstructure:"signing-method"`
+
+	fullPrefix string
 }
 
 // NewJWTOptions creates a JWTOptions object with default parameters.
@@ -41,7 +43,7 @@ func (s *JWTOptions) Validate() []error {
 	var errs []error
 
 	if !govalidator.StringLength(s.Key, "6", "32") {
-		errs = append(errs, fmt.Errorf("--jwt.key must larger than 5 and little than 33"))
+		errs = append(errs, fmt.Errorf("--%s.key must larger than 5 and little than 33", s.fullPrefix))
 	}
 
 	return errs
@@ -49,15 +51,15 @@ func (s *JWTOptions) Validate() []error {
 
 // AddFlags adds flags related to features for a specific api server to the
 // specified FlagSet.
-func (s *JWTOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
+func (s *JWTOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
 	if fs == nil {
 		return
 	}
 
-	// fs.StringVar(&s.Realm, "jwt.realm", s.Realm, "Realm name to display to the user.")
-	fs.StringVar(&s.Key, "jwt.key", s.Key, "Private key used to sign jwt token.")
-	fs.DurationVar(&s.Expired, "jwt.expired", s.Expired, "JWT token expiration time.")
-	fs.DurationVar(&s.MaxRefresh, "jwt.max-refresh", s.MaxRefresh, ""+
+	// fs.StringVar(&s.Realm, fullPrefix+".realm", s.Realm, "Realm name to display to the user.")
+	fs.StringVar(&s.Key, fullPrefix+".key", s.Key, "Private key used to sign jwt token.")
+	fs.DurationVar(&s.Expired, fullPrefix+".expired", s.Expired, "JWT token expiration time.")
+	fs.DurationVar(&s.MaxRefresh, fullPrefix+".max-refresh", s.MaxRefresh, ""+
 		"This field allows clients to refresh their token until MaxRefresh has passed.")
-	fs.StringVar(&s.SigningMethod, "jwt.signing-method", s.SigningMethod, "JWT token signature method.")
+	fs.StringVar(&s.SigningMethod, fullPrefix+".signing-method", s.SigningMethod, "JWT token signature method.")
 }

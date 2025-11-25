@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"time"
 
 	"gorm.io/driver/sqlite"
@@ -94,13 +95,13 @@ func setSQLiteDefaults(opts *SQLiteOptions) {
 
 // NewInMemorySQLite creates a new in-memory SQLite database instance.
 // This is useful for testing or temporary data storage.
-func NewInMemorySQLite() (*gorm.DB, error) {
+func NewInMemorySQLite(dbFile string) (*gorm.DB, error) {
 	opts := &SQLiteOptions{
 		// Configure the database using SQLite memory mode
 		// ?cache=shared is used to set SQLite's cache mode to shared cache mode.
 		// By default, each SQLite database connection has its own private cache. This mode is called private cache.
 		// Using shared cache mode allows different connections to share the same in-memory database and cache.
-		Database:              "file:onex:memory:?cache=shared",
+		Database:              fmt.Sprintf("file:%s?cache=shared", dbFile),
 		MaxIdleConnections:    1,
 		MaxOpenConnections:    1,
 		MaxConnectionLifeTime: time.Hour,

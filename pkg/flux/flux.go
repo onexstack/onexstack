@@ -203,6 +203,16 @@ func (f *Flux[K, V]) checkLoaderCapabilities() {
 	_, f.hasLoadAll = f.config.Loader.(AllLoader[K, V])
 }
 
+// MustGet retrieves the value for the given key and panics if an error occurs.
+// Use this method only when you're certain the key exists and no errors are expected.
+func (f *Flux[K, V]) MustGet(ctx context.Context, key K) V {
+	val, err := f.Get(ctx, key)
+	if err != nil {
+		panic(err)
+	}
+	return val
+}
+
 // Get retrieves a value from cache or loads it if not present
 func (f *Flux[K, V]) Get(ctx context.Context, key K) (V, error) {
 	if atomic.LoadInt32(&f.closed) == 1 {

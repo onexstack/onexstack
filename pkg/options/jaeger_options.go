@@ -44,12 +44,12 @@ func (o *JaegerOptions) Validate() []error {
 }
 
 // AddFlags adds flags related to mysql storage for a specific APIServer to the specified FlagSet.
-func (o *JaegerOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	fs.StringVar(&o.Server, "jaeger.server", o.Server, ""+
+func (o *JaegerOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	fs.StringVar(&o.Server, fullPrefix+".server", o.Server, ""+
 		"Server is the url of the Jaeger server.")
-	fs.StringVar(&o.ServiceName, "jaeger.service-name", o.ServiceName, ""+
+	fs.StringVar(&o.ServiceName, fullPrefix+".service-name", o.ServiceName, ""+
 		"Specify the service name for jaeger resource.")
-	fs.StringVar(&o.Env, "jaeger.env", o.Env, "Specify the deployment environment(dev/test/staging/prod).")
+	fs.StringVar(&o.Env, fullPrefix+".env", o.Env, "Specify the deployment environment(dev/test/staging/prod).")
 }
 
 func (o *JaegerOptions) SetTracerProvider() error {

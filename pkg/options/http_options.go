@@ -51,12 +51,20 @@ func (o *HTTPOptions) Validate() []error {
 	return errors
 }
 
-// AddFlags adds flags related to HTTPS server for a specific APIServer to the
-// specified FlagSet.
-func (o *HTTPOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	fs.StringVar(&o.Network, "http.network", o.Network, "Specify the network for the HTTP server.")
-	fs.StringVar(&o.Addr, "http.addr", o.Addr, "Specify the HTTP server bind address and port.")
-	fs.DurationVar(&o.Timeout, "http.timeout", o.Timeout, "Timeout for server connections.")
+// AddFlagsWithPrefix registers HTTP server related flags to the specified FlagSet,
+// using fullPrefix as the complete prefix for flag names.
+//
+// Example:
+//
+//	o.AddFlagsWithPrefix(fs, "apiserver.http")  // --apiserver.http.network, --apiserver.http.addr, etc.
+//	o.AddFlagsWithPrefix(fs, "gateway.http")    // --gateway.http.network, --gateway.http.addr, etc.
+func (o *HTTPOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	fs.StringVar(&o.Network, fullPrefix+".network", o.Network,
+		"Network type for the HTTP server (e.g., tcp, tcp4, tcp6).")
+	fs.StringVar(&o.Addr, fullPrefix+".addr", o.Addr,
+		"Listen address for the HTTP server (e.g., :8080, 0.0.0.0:8443).")
+	fs.DurationVar(&o.Timeout, fullPrefix+".timeout", o.Timeout,
+		"Timeout for incoming HTTP connections.")
 }
 
 // Complete fills in any fields not set that are required to have valid data.

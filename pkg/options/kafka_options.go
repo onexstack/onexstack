@@ -245,51 +245,51 @@ func (o *KafkaOptions) Validate() []error {
 }
 
 // AddFlags adds flags related to redis storage for a specific APIServer to the specified FlagSet.
-func (o *KafkaOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	o.TLSOptions.AddFlags(fs, "kafka")
+func (o *KafkaOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	o.TLSOptions.AddFlags(fs, "tls")
 
-	fs.StringSliceVar(&o.Brokers, "kafka.brokers", o.Brokers, "The list of brokers used to discover the partitions available on the kafka cluster.")
-	fs.StringVar(&o.Topic, "kafka.topic", o.Topic, "The topic that the writer/reader will produce/consume messages to.")
-	fs.StringVar(&o.ClientID, "kafka.client-id", o.ClientID, " Unique identifier for client connections established by this Dialer. ")
-	fs.DurationVar(&o.Timeout, "kafka.timeout", o.Timeout, "Timeout is the maximum amount of time a dial will wait for a connect to complete.")
-	fs.StringVar(&o.SASLMechanism, "kafka.mechanism", o.SASLMechanism, "Configures the Dialer to use SASL authentication.")
-	fs.StringVar(&o.Username, "kafka.username", o.Username, "Username of the kafka cluster.")
-	fs.StringVar(&o.Password, "kafka.password", o.Password, "Password of the kafka cluster.")
-	fs.StringVar(&o.Algorithm, "kafka.algorithm", o.Algorithm, "Algorithm used to create sasl.Mechanism.")
-	fs.BoolVar(&o.Compressed, "kafka.compressed", o.Compressed, "compressed is used to specify whether compress Kafka messages.")
-	fs.IntVar(&o.WriterOptions.RequiredAcks, "kafka.required-acks", o.WriterOptions.RequiredAcks, ""+
+	fs.StringSliceVar(&o.Brokers, fullPrefix+".brokers", o.Brokers, "The list of brokers used to discover the partitions available on the kafka cluster.")
+	fs.StringVar(&o.Topic, fullPrefix+".topic", o.Topic, "The topic that the writer/reader will produce/consume messages to.")
+	fs.StringVar(&o.ClientID, fullPrefix+".client-id", o.ClientID, " Unique identifier for client connections established by this Dialer. ")
+	fs.DurationVar(&o.Timeout, fullPrefix+".timeout", o.Timeout, "Timeout is the maximum amount of time a dial will wait for a connect to complete.")
+	fs.StringVar(&o.SASLMechanism, fullPrefix+".mechanism", o.SASLMechanism, "Configures the Dialer to use SASL authentication.")
+	fs.StringVar(&o.Username, fullPrefix+".username", o.Username, "Username of the kafka cluster.")
+	fs.StringVar(&o.Password, fullPrefix+".password", o.Password, "Password of the kafka cluster.")
+	fs.StringVar(&o.Algorithm, fullPrefix+".algorithm", o.Algorithm, "Algorithm used to create sasl.Mechanism.")
+	fs.BoolVar(&o.Compressed, fullPrefix+".compressed", o.Compressed, "compressed is used to specify whether compress Kafka messages.")
+	fs.IntVar(&o.WriterOptions.RequiredAcks, fullPrefix+".required-acks", o.WriterOptions.RequiredAcks, ""+
 		"Number of acknowledges from partition replicas required before receiving a response to a produce request.")
-	fs.IntVar(&o.WriterOptions.MaxAttempts, "kafka.writer.max-attempts", o.WriterOptions.MaxAttempts, ""+
+	fs.IntVar(&o.WriterOptions.MaxAttempts, fullPrefix+".writer.max-attempts", o.WriterOptions.MaxAttempts, ""+
 		"Limit on how many attempts will be made to deliver a message.")
-	fs.BoolVar(&o.WriterOptions.Async, "kafka.writer.async", o.WriterOptions.Async, "Limit on how many attempts will be made to deliver a message.")
-	fs.IntVar(&o.WriterOptions.BatchSize, "kafka.writer.batch-size", o.WriterOptions.BatchSize, ""+
+	fs.BoolVar(&o.WriterOptions.Async, fullPrefix+".writer.async", o.WriterOptions.Async, "Limit on how many attempts will be made to deliver a message.")
+	fs.IntVar(&o.WriterOptions.BatchSize, fullPrefix+".writer.batch-size", o.WriterOptions.BatchSize, ""+
 		"Limit on how many messages will be buffered before being sent to a partition.")
-	fs.DurationVar(&o.WriterOptions.BatchTimeout, "kafka.writer.batch-timeout", o.WriterOptions.BatchTimeout, ""+
+	fs.DurationVar(&o.WriterOptions.BatchTimeout, fullPrefix+".writer.batch-timeout", o.WriterOptions.BatchTimeout, ""+
 		"Time limit on how often incomplete message batches will be flushed to kafka.")
-	fs.IntVar(&o.WriterOptions.BatchBytes, "kafka.writer.batch-bytes", o.WriterOptions.BatchBytes, ""+
+	fs.IntVar(&o.WriterOptions.BatchBytes, fullPrefix+".writer.batch-bytes", o.WriterOptions.BatchBytes, ""+
 		"Limit the maximum size of a request in bytes before being sent to a partition.")
-	fs.StringVar(&o.ReaderOptions.GroupID, "kafka.reader.group-id", o.ReaderOptions.GroupID, ""+
+	fs.StringVar(&o.ReaderOptions.GroupID, fullPrefix+".reader.group-id", o.ReaderOptions.GroupID, ""+
 		"GroupID holds the optional consumer group id. If GroupID is specified, then Partition should NOT be specified e.g. 0.")
-	fs.IntVar(&o.ReaderOptions.Partition, "kafka.reader.partition", o.ReaderOptions.Partition, "Partition to read messages from.")
-	fs.IntVar(&o.ReaderOptions.QueueCapacity, "kafka.reader.queue-capacity", o.ReaderOptions.QueueCapacity, ""+
+	fs.IntVar(&o.ReaderOptions.Partition, fullPrefix+".reader.partition", o.ReaderOptions.Partition, "Partition to read messages from.")
+	fs.IntVar(&o.ReaderOptions.QueueCapacity, fullPrefix+".reader.queue-capacity", o.ReaderOptions.QueueCapacity, ""+
 		"The capacity of the internal message queue, defaults to 100 if none is set.")
-	fs.IntVar(&o.ReaderOptions.MinBytes, "kafka.reader.min-bytes", o.ReaderOptions.MinBytes, ""+
+	fs.IntVar(&o.ReaderOptions.MinBytes, fullPrefix+".reader.min-bytes", o.ReaderOptions.MinBytes, ""+
 		"MinBytes indicates to the broker the minimum batch size that the consumer will accept.")
-	fs.IntVar(&o.ReaderOptions.MaxBytes, "kafka.reader.max-bytes", o.ReaderOptions.MaxBytes, ""+
+	fs.IntVar(&o.ReaderOptions.MaxBytes, fullPrefix+".reader.max-bytes", o.ReaderOptions.MaxBytes, ""+
 		"MaxBytes indicates to the broker the maximum batch size that the consumer will accept.")
-	fs.DurationVar(&o.ReaderOptions.MaxWait, "kafka.reader.max-wait", o.ReaderOptions.MaxWait, ""+
+	fs.DurationVar(&o.ReaderOptions.MaxWait, fullPrefix+".reader.max-wait", o.ReaderOptions.MaxWait, ""+
 		"Maximum amount of time to wait for new data to come when fetching batches of messages from kafka.")
-	fs.DurationVar(&o.ReaderOptions.ReadBatchTimeout, "kafka.reader.read-batch-timeout", o.ReaderOptions.ReadBatchTimeout, ""+
+	fs.DurationVar(&o.ReaderOptions.ReadBatchTimeout, fullPrefix+".reader.read-batch-timeout", o.ReaderOptions.ReadBatchTimeout, ""+
 		"ReadBatchTimeout amount of time to wait to fetch message from kafka messages batch.")
-	fs.DurationVar(&o.ReaderOptions.HeartbeatInterval, "kafka.reader.heartbeat-interval", o.ReaderOptions.HeartbeatInterval, ""+
+	fs.DurationVar(&o.ReaderOptions.HeartbeatInterval, fullPrefix+".reader.heartbeat-interval", o.ReaderOptions.HeartbeatInterval, ""+
 		"HeartbeatInterval sets the optional frequency at which the reader sends the consumer group heartbeat update.")
-	fs.DurationVar(&o.ReaderOptions.CommitInterval, "kafka.reader.commit-interval", o.ReaderOptions.CommitInterval, ""+
+	fs.DurationVar(&o.ReaderOptions.CommitInterval, fullPrefix+".reader.commit-interval", o.ReaderOptions.CommitInterval, ""+
 		"CommitInterval indicates the interval at which offsets are committed to the broker.")
-	fs.DurationVar(&o.ReaderOptions.RebalanceTimeout, "kafka.reader.rebalance-timeout", o.ReaderOptions.RebalanceTimeout, ""+
+	fs.DurationVar(&o.ReaderOptions.RebalanceTimeout, fullPrefix+".reader.rebalance-timeout", o.ReaderOptions.RebalanceTimeout, ""+
 		"RebalanceTimeout optionally sets the length of time the coordinator will wait for members to join as part of a rebalance.")
-	fs.Int64Var(&o.ReaderOptions.StartOffset, "kafka.reader.start-offset", o.ReaderOptions.StartOffset, ""+
+	fs.Int64Var(&o.ReaderOptions.StartOffset, fullPrefix+".reader.start-offset", o.ReaderOptions.StartOffset, ""+
 		"StartOffset determines from whence the consumer group should begin consuming when it finds a partition without a committed offset.")
-	fs.IntVar(&o.ReaderOptions.MaxAttempts, "kafka.reader.max-attempts", o.ReaderOptions.MaxAttempts, ""+
+	fs.IntVar(&o.ReaderOptions.MaxAttempts, fullPrefix+".reader.max-attempts", o.ReaderOptions.MaxAttempts, ""+
 		"Limit of how many attempts will be made before delivering the error. ")
 }
 

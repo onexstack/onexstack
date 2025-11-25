@@ -51,11 +51,11 @@ func (o *EtcdOptions) Validate() []error {
 }
 
 // AddFlags adds flags related to redis storage for a specific APIServer to the specified FlagSet.
-func (o *EtcdOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	o.TLSOptions.AddFlags(fs, "etcd")
+func (o *EtcdOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	o.TLSOptions.AddFlags(fs, fullPrefix+".tls")
 
-	fs.StringSliceVar(&o.Endpoints, "etcd.endpoints", o.Endpoints, "Endpoints of etcd cluster.")
-	fs.StringVar(&o.Username, "etcd.username", o.Username, "Username of etcd cluster.")
-	fs.StringVar(&o.Password, "etcd.password", o.Password, "Password of etcd cluster.")
-	fs.DurationVar(&o.DialTimeout, "etcd.dial-timeout", o.DialTimeout, "Etcd dial timeout in seconds.")
+	fs.StringSliceVar(&o.Endpoints, fullPrefix+".endpoints", o.Endpoints, "Endpoints of etcd cluster.")
+	fs.StringVar(&o.Username, fullPrefix+".username", o.Username, "Username of etcd cluster.")
+	fs.StringVar(&o.Password, fullPrefix+".password", o.Password, "Password of etcd cluster.")
+	fs.DurationVar(&o.DialTimeout, fullPrefix+".dial-timeout", o.DialTimeout, "Etcd dial timeout in seconds.")
 }

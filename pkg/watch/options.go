@@ -48,26 +48,26 @@ func NewOptions() *Options {
 
 // AddFlags adds the command-line flags associated with the Options structure to the provided FlagSet.
 // This will allow users to configure the watch server via command-line arguments.
-func (o *Options) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&o.LockName, "watch.lock-name", o.LockName,
+func (o *Options) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	fs.StringVar(&o.LockName, fullPrefix+".lock-name", o.LockName,
 		"The name of the lock used by the server.")
 
-	fs.IntVar(&o.HealthzPort, "watch.healthz-port", o.HealthzPort,
+	fs.IntVar(&o.HealthzPort, fullPrefix+".healthz-port", o.HealthzPort,
 		"The port number for the health check endpoint.")
 
-	fs.StringVar(&o.MetricsAddr, "watch.metrics-addr", o.MetricsAddr,
+	fs.StringVar(&o.MetricsAddr, fullPrefix+".metrics-addr", o.MetricsAddr,
 		"The address (host:port) for the metrics server endpoint.")
 
-	fs.StringSliceVar(&o.DisableWatchers, "watch.disable-watchers", o.DisableWatchers,
+	fs.StringSliceVar(&o.DisableWatchers, fullPrefix+".disable-watchers", o.DisableWatchers,
 		"The list of watchers that should be disabled.")
 
-	fs.Int64Var(&o.MaxWorkers, "watch.max-workers", o.MaxWorkers,
+	fs.Int64Var(&o.MaxWorkers, fullPrefix+".max-workers", o.MaxWorkers,
 		"Specify the maximum concurrency worker of each watcher.")
 
-	fs.DurationVar(&o.WatchTimeout, "watch.timeout", o.WatchTimeout,
+	fs.DurationVar(&o.WatchTimeout, fullPrefix+".timeout", o.WatchTimeout,
 		"The timeout duration for each individual watch execution (e.g., 30s, 2m, 1h).")
 
-	fs.IntVar(&o.PerConcurrency, "watch.per-concurrency", o.PerConcurrency,
+	fs.IntVar(&o.PerConcurrency, fullPrefix+".per-concurrency", o.PerConcurrency,
 		"The maximum number of concurrent executions allowed for each individual watcher.")
 }
 

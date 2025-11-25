@@ -63,15 +63,15 @@ func (o *MongoOptions) Validate() []error {
 }
 
 // AddFlags adds flags related to redis storage for a specific APIServer to the specified FlagSet.
-func (o *MongoOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	o.TLSOptions.AddFlags(fs, "mongo")
+func (o *MongoOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	o.TLSOptions.AddFlags(fs, "tls")
 
-	fs.DurationVar(&o.Timeout, "mongo.timeout", o.Timeout, "Timeout is the maximum amount of time a dial will wait for a connect to complete.")
-	fs.StringVar(&o.URL, "mongo.url", o.URL, "The MongoDB server address.")
-	fs.StringVar(&o.Database, "mongo.database", o.Database, "The MongoDB database name.")
-	fs.StringVar(&o.Collection, "mongo.collection", o.Collection, "The MongoDB collection name.")
-	fs.StringVar(&o.Username, "mongo.username", o.Username, "Username of the MongoDB database (optional).")
-	fs.StringVar(&o.Password, "mongo.password", o.Password, "Password of the MongoDB database (optional).")
+	fs.DurationVar(&o.Timeout, fullPrefix+".timeout", o.Timeout, "Timeout is the maximum amount of time a dial will wait for a connect to complete.")
+	fs.StringVar(&o.URL, fullPrefix+".url", o.URL, "The MongoDB server address.")
+	fs.StringVar(&o.Database, fullPrefix+".database", o.Database, "The MongoDB database name.")
+	fs.StringVar(&o.Collection, fullPrefix+".collection", o.Collection, "The MongoDB collection name.")
+	fs.StringVar(&o.Username, fullPrefix+".username", o.Username, "Username of the MongoDB database (optional).")
+	fs.StringVar(&o.Password, fullPrefix+".password", o.Password, "Password of the MongoDB database (optional).")
 }
 
 // NewClient creates a new MongoDB client based on the provided options.

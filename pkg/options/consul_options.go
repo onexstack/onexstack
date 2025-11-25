@@ -37,10 +37,10 @@ func (o *ConsulOptions) Validate() []error {
 }
 
 // AddFlags adds flags related to mysql storage for a specific APIServer to the specified FlagSet.
-func (o *ConsulOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	fs.StringVar(&o.Addr, "consul.addr", o.Addr, ""+
+func (o *ConsulOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	fs.StringVar(&o.Addr, fullPrefix+".addr", o.Addr, ""+
 		"Addr is the address of the consul server.")
 
-	fs.StringVar(&o.Scheme, "consul.scheme", o.Scheme, ""+
+	fs.StringVar(&o.Scheme, fullPrefix+".scheme", o.Scheme, ""+
 		"Scheme is the URI scheme for the consul server.")
 }

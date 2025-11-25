@@ -153,7 +153,6 @@ func Observability(opts ...Option) gin.HandlerFunc {
 		httpData := map[string]any{
 			"request": map[string]any{
 				"method": c.Request.Method,
-				"route":  c.FullPath(),
 				"path":   c.Request.URL.Path,
 			},
 			"response": map[string]any{

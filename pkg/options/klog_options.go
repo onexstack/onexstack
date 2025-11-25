@@ -51,10 +51,10 @@ func (o *LogOptions) Validate() []error {
 }
 
 // AddFlags adds command line flags for the configuration.
-func (o *LogOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	fs.StringVar(&o.Format, "logs.format", o.Format, "Sets the log format. Permitted formats: json, text.")
-	fs.DurationVar(&o.FlushFrequency, "log.flush-frequency", o.FlushFrequency, "Maximum number of seconds between log flushes.")
-	fs.VarP(logsapi.VerbosityLevelPflag(&o.Verbosity), "logs.verbosity", "", " Number for the log level verbosity.")
+func (o *LogOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	fs.StringVar(&o.Format, fullPrefix+".format", o.Format, "Sets the log format. Permitted formats: json, text.")
+	fs.DurationVar(&o.FlushFrequency, fullPrefix+".flush-frequency", o.FlushFrequency, "Maximum number of seconds between log flushes.")
+	fs.VarP(logsapi.VerbosityLevelPflag(&o.Verbosity), fullPrefix+".verbosity", "", " Number for the log level verbosity.")
 }
 
 func (o *LogOptions) Native() *logsapi.LoggingConfiguration {

@@ -46,22 +46,22 @@ func (o *SQLiteOptions) Validate() []error {
 }
 
 // AddFlags injects SQLite-related configuration flags into the given FlagSet for an API server.
-func (o *SQLiteOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	fs.StringVar(&o.Addr, join(prefixes...)+"sqlite.path", o.Addr,
+func (o *SQLiteOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	fs.StringVar(&o.Addr, fullPrefix+".path", o.Addr,
 		"SQLite database file path (e.g. ./data/app.db or file::memory:?cache=shared).")
-	fs.StringVar(&o.Username, join(prefixes...)+"sqlite.username", o.Username,
+	fs.StringVar(&o.Username, fullPrefix+".username", o.Username,
 		"Username (reserved field for configuration consistency).")
-	fs.StringVar(&o.Password, join(prefixes...)+"sqlite.password", o.Password,
+	fs.StringVar(&o.Password, fullPrefix+".password", o.Password,
 		"Password (reserved field for configuration consistency).")
-	fs.StringVar(&o.Database, join(prefixes...)+"sqlite.database", o.Database,
+	fs.StringVar(&o.Database, fullPrefix+".database", o.Database,
 		"Database name or override path for SQLite.")
-	fs.IntVar(&o.MaxIdleConnections, join(prefixes...)+"sqlite.max-idle-connections", o.MaxIdleConnections,
+	fs.IntVar(&o.MaxIdleConnections, fullPrefix+".max-idle-connections", o.MaxIdleConnections,
 		"Maximum number of idle connections to SQLite.")
-	fs.IntVar(&o.MaxOpenConnections, join(prefixes...)+"sqlite.max-open-connections", o.MaxOpenConnections,
+	fs.IntVar(&o.MaxOpenConnections, fullPrefix+".max-open-connections", o.MaxOpenConnections,
 		"Maximum number of open connections to SQLite.")
-	fs.DurationVar(&o.MaxConnectionLifeTime, join(prefixes...)+"sqlite.max-connection-life-time", o.MaxConnectionLifeTime,
+	fs.DurationVar(&o.MaxConnectionLifeTime, fullPrefix+".max-connection-life-time", o.MaxConnectionLifeTime,
 		"Maximum lifetime of a SQLite database connection.")
-	fs.IntVar(&o.LogLevel, join(prefixes...)+"sqlite.log-mode", o.LogLevel,
+	fs.IntVar(&o.LogLevel, fullPrefix+".log-mode", o.LogLevel,
 		"Specify GORM log level.")
 }
 

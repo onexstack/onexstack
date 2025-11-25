@@ -114,35 +114,27 @@ func (o *FluxOptions) Validate() []error {
 }
 
 // AddFlags adds command line flags for the configuration.
-func (o *FluxOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	prefix := join(prefixes...) + "flux."
-
+func (o *FluxOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
 	// Cache settings
-	fs.Int64Var(&o.MaxKeys, prefix+"max-keys", o.MaxKeys,
+	fs.Int64Var(&o.MaxKeys, fullPrefix+".max-keys", o.MaxKeys,
 		"Maximum number of keys to store in cache.")
-	fs.DurationVar(&o.TTL, prefix+"ttl", o.TTL,
+	fs.DurationVar(&o.TTL, fullPrefix+".ttl", o.TTL,
 		"Time to live for cache entries. Set to 0 for no expiration.")
-	fs.Int64Var(&o.BufferItems, prefix+"buffer-items", o.BufferItems,
+	fs.Int64Var(&o.BufferItems, fullPrefix+".buffer-items", o.BufferItems,
 		"Buffer size for internal operations.")
-
-	// Loader settings
-	fs.DurationVar(&o.LoadTimeout, prefix+"load-timeout", o.LoadTimeout,
+	fs.DurationVar(&o.LoadTimeout, fullPrefix+".load-timeout", o.LoadTimeout,
 		"Timeout for data loading operations.")
-
-	// Async refresh settings
-	fs.BoolVar(&o.EnableAsync, prefix+"enable-async", o.EnableAsync,
+	fs.BoolVar(&o.EnableAsync, fullPrefix+".enable-async", o.EnableAsync,
 		"Enable asynchronous refresh of cache entries.")
-	fs.DurationVar(&o.RefreshInterval, prefix+"refresh-interval", o.RefreshInterval,
+	fs.DurationVar(&o.RefreshInterval, fullPrefix+".refresh-interval", o.RefreshInterval,
 		"Interval between async refresh operations.")
-	fs.StringVar(&o.RefreshMode, prefix+"refresh-mode", o.RefreshMode,
+	fs.StringVar(&o.RefreshMode, fullPrefix+".refresh-mode", o.RefreshMode,
 		"Refresh mode for async operations. Permitted modes: single, batch, auto.")
-	fs.IntVar(&o.MaxConcurrency, prefix+"max-concurrency", o.MaxConcurrency,
+	fs.IntVar(&o.MaxConcurrency, fullPrefix+".max-concurrency", o.MaxConcurrency,
 		"Maximum number of concurrent refresh operations.")
-	fs.IntVar(&o.BatchSize, prefix+"batch-size", o.BatchSize,
+	fs.IntVar(&o.BatchSize, fullPrefix+".batch-size", o.BatchSize,
 		"Batch size for batch refresh mode.")
-
-	// Monitoring
-	fs.BoolVar(&o.EnableStats, prefix+"enable-stats", o.EnableStats,
+	fs.BoolVar(&o.EnableStats, fullPrefix+".enable-stats", o.EnableStats,
 		"Enable statistics collection for cache operations.")
 }
 

@@ -33,8 +33,8 @@ func (o *ClientCertAuthenticationOptions) Validate() []error {
 
 // AddFlags adds flags related to ClientCertAuthenticationOptions for a specific server to the
 // specified FlagSet.
-func (o *ClientCertAuthenticationOptions) AddFlags(fs *pflag.FlagSet, prefixes ...string) {
-	fs.StringVar(&o.ClientCA, "client-ca-file", o.ClientCA, ""+
+func (o *ClientCertAuthenticationOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	fs.StringVar(&o.ClientCA, fullPrefix+".ca-file", o.ClientCA, ""+
 		"If set, any request presenting a client certificate signed by one of "+
 		"the authorities in the client-ca-file is authenticated with an identity "+
 		"corresponding to the CommonName of the client certificate.")
