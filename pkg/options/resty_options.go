@@ -88,15 +88,15 @@ func (o *RestyOptions) Validate() []error {
 
 // AddFlags adds flags related to HTTP client configuration.
 func (o *RestyOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
-	fs.StringVar(&o.Endpoint, fullPrefix+"endpoint", o.Endpoint,
+	fs.StringVar(&o.Endpoint, fullPrefix+".endpoint", o.Endpoint,
 		"Base URL of the target API server.")
-	fs.StringVar(&o.UserAgent, fullPrefix+"user-agent", o.UserAgent,
+	fs.StringVar(&o.UserAgent, fullPrefix+".user-agent", o.UserAgent,
 		"Used to specify the Resty client User-Agent.")
-	fs.BoolVar(&o.Debug, fullPrefix+"debug", o.Debug,
+	fs.BoolVar(&o.Debug, fullPrefix+".debug", o.Debug,
 		"Enables the debug mode on Resty client (string-based).")
-	fs.DurationVar(&o.Timeout, fullPrefix+"timeout", o.Timeout,
+	fs.DurationVar(&o.Timeout, fullPrefix+".timeout", o.Timeout,
 		"Request timeout for client.")
-	fs.IntVar(&o.RetryCount, fullPrefix+"retry-count", o.RetryCount,
+	fs.IntVar(&o.RetryCount, fullPrefix+".retry-count", o.RetryCount,
 		"Enables retry on Resty client and allows you to set the number of retry attempts.")
 }
 

@@ -246,7 +246,7 @@ func (o *KafkaOptions) Validate() []error {
 
 // AddFlags adds flags related to redis storage for a specific APIServer to the specified FlagSet.
 func (o *KafkaOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
-	o.TLSOptions.AddFlags(fs, "tls")
+	o.TLSOptions.AddFlags(fs, fullPrefix+".tls")
 
 	fs.StringSliceVar(&o.Brokers, fullPrefix+".brokers", o.Brokers, "The list of brokers used to discover the partitions available on the kafka cluster.")
 	fs.StringVar(&o.Topic, fullPrefix+".topic", o.Topic, "The topic that the writer/reader will produce/consume messages to.")

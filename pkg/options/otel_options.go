@@ -41,7 +41,11 @@ const (
 	OutputModeOTLP    OutputMode = "otel"    // Send to OpenTelemetry Collector
 	OutputModeFile    OutputMode = "file"    // Output to files
 	OutputModeConsole OutputMode = "console" // Output to standard output
-	OutputModeLegacy  OutputMode = "legacy"  // Use traditional metrics + logging (no OTel)
+	OutputModeClassic OutputMode = "classic" // Use traditional metrics + logging (no OTel)
+
+	// Hybrid modes:
+	// log->stdout, metric->prometheus, trace->otel
+	OutputModeHybrid OutputMode = "hybrid"
 )
 
 // String implements the Stringer interface
@@ -52,7 +56,7 @@ func (o OutputMode) String() string {
 // IsValid validates the output mode
 func (o OutputMode) IsValid() bool {
 	switch o {
-	case OutputModeConsole, OutputModeFile, OutputModeOTLP, OutputModeLegacy:
+	case OutputModeConsole, OutputModeFile, OutputModeOTLP, OutputModeClassic, OutputModeHybrid:
 		return true
 	default:
 		return false
@@ -135,7 +139,7 @@ func NewOTelOptions() *OTelOptions {
 		Insecure:          true,
 		WithResource:      false,
 		SamplingRatio:     1.0,
-		OutputMode:        OutputModeLegacy,
+		OutputMode:        OutputModeClassic,
 		OutputDir:         "./otel-output",
 		Level:             "info",
 		AddSource:         false,
@@ -215,7 +219,7 @@ func (o *OTelOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
 	fs.StringVar(&o.Level, fullPrefix+".level", o.Level, "Log level: debug, info, warn, error")
 	fs.BoolVar(&o.AddSource, fullPrefix+".add-source", o.AddSource, "Add source code position to logs")
 	if o.Slog != nil {
-		o.Slog.AddFlags(fs, fullPrefix)
+		o.Slog.AddFlags(fs, fullPrefix+".slog")
 	}
 }
 
@@ -279,9 +283,9 @@ func (o *OTelOptions) initTraces(ctx context.Context) error {
 	)
 
 	switch o.OutputMode {
-	case OutputModeLegacy:
+	case OutputModeClassic:
 		exporter = emptyexporter.NewEmptyExporter()
-	case OutputModeOTLP:
+	case OutputModeOTLP, OutputModeHybrid:
 		opts := []otlptracegrpc.Option{
 			otlptracegrpc.WithEndpoint(o.Endpoint),
 		}
@@ -328,7 +332,7 @@ func (o *OTelOptions) initMetrics(ctx context.Context) error {
 	)
 
 	switch o.OutputMode {
-	case OutputModeLegacy:
+	case OutputModeClassic, OutputModeHybrid:
 		reader, err = prometheus.New()
 	case OutputModeOTLP:
 		opts := []otlpmetricgrpc.Option{otlpmetricgrpc.WithEndpoint(o.Endpoint)}
@@ -372,7 +376,7 @@ func (o *OTelOptions) initLogs(ctx context.Context) error {
 	)
 
 	switch o.OutputMode {
-	case OutputModeLegacy:
+	case OutputModeClassic, OutputModeHybrid:
 		return o.Slog.Apply()
 	case OutputModeOTLP:
 		opts := []otlploggrpc.Option{
