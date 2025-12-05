@@ -218,8 +218,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace (
-	github.com/polarismesh/polaris-go => /home/colin/workspace/golang/src/github.com/polarismesh/polaris-go
-	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin => /home/colin/workspace/golang/src/github.com/open-telemetry/opentelemetry-go-contrib/instrumentation/github.com/gin-gonic/gin/otelgin
-	google.golang.org/grpc => google.golang.org/grpc v1.64.0 // To compatible with polarismesh/grpc-go-polaris
-)
+replace google.golang.org/grpc => google.golang.org/grpc v1.64.0 // To compatible with polarismesh/grpc-go-polaris
