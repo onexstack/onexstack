@@ -489,6 +489,8 @@ func (f *Flux[K, V]) allWorker() {
 func (f *Flux[K, V]) refreshScheduler() {
 	defer f.wg.Done()
 
+	f.scheduleRefresh()
+
 	for {
 		select {
 		case <-f.refreshTicker.C:
@@ -512,10 +514,6 @@ func (f *Flux[K, V]) scheduleRefresh() {
 		}
 	}
 	f.keysMutex.RUnlock()
-
-	if len(keysToRefresh) == 0 {
-		return
-	}
 
 	switch f.config.RefreshMode {
 	case RefreshModeSingle:
