@@ -88,28 +88,28 @@ func (o *RestyOptions) Validate() []error {
 
 	// Endpoint must be non-empty and a valid URL with http/https scheme.
 	if o.Endpoint == "" {
-		errs = append(errs, fmt.Errorf("--"+o.fullPrefix+"endpoint is required"))
+		errs = append(errs, fmt.Errorf("--"+o.fullPrefix+".endpoint is required"))
 	} else if u, err := url.ParseRequestURI(o.Endpoint); err != nil {
-		errs = append(errs, fmt.Errorf("invalid resty.endpoint %q: %v", o.Endpoint, err))
+		errs = append(errs, fmt.Errorf("invalid endpoint %q: %v", o.Endpoint, err))
 	} else if u.Scheme != "http" && u.Scheme != "https" {
-		errs = append(errs, fmt.Errorf("--"+o.fullPrefix+"endpoint must use http or https scheme, got %q", u.Scheme))
+		errs = append(errs, fmt.Errorf("--"+o.fullPrefix+".endpoint must use http or https scheme, got %q", u.Scheme))
 	}
 
 	// Ensure non-negative RetryCount and positive Timeout.
 	if o.RetryCount < 0 {
-		errs = append(errs, fmt.Errorf("--"+o.fullPrefix+"retry-count must be >= 0, got %d", o.RetryCount))
+		errs = append(errs, fmt.Errorf("--"+o.fullPrefix+".retry-count must be >= 0, got %d", o.RetryCount))
 	}
 	if o.Timeout <= 0 {
-		errs = append(errs, fmt.Errorf("--"+o.fullPrefix+"timeout must be > 0, got %s", o.Timeout))
+		errs = append(errs, fmt.Errorf("--"+o.fullPrefix+".timeout must be > 0, got %s", o.Timeout))
 	}
 
 	// Validate authentication configurations
 	if (o.SecretID != "" && o.SecretKey == "") || (o.SecretID == "" && o.SecretKey != "") {
-		errs = append(errs, fmt.Errorf("both --"+o.fullPrefix+"secret-id and --"+o.fullPrefix+"secret-key must be provided together"))
+		errs = append(errs, fmt.Errorf("both --"+o.fullPrefix+".secret-id and --"+o.fullPrefix+".secret-key must be provided together"))
 	}
 
 	if (o.Username != "" && o.Password == "") || (o.Username == "" && o.Password != "") {
-		errs = append(errs, fmt.Errorf("both --"+o.fullPrefix+"username and --"+o.fullPrefix+"password must be provided together"))
+		errs = append(errs, fmt.Errorf("both --"+o.fullPrefix+".username and --"+o.fullPrefix+".password must be provided together"))
 	}
 
 	return errs

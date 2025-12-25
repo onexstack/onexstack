@@ -1,6 +1,7 @@
 package options
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var _ IOptions = (*SlogOptions)(nil)
@@ -148,7 +150,7 @@ func (o *SlogOptions) BuildHandler() (slog.Handler, error) {
 		handler = slog.NewTextHandler(writer, opts)
 	}
 
-	return handler, nil
+	return &TraceIDHandler{Handler: handler}, nil
 }
 
 // BuildLogger constructs and returns a configured slog.Logger instance without affecting the global logger.
@@ -168,4 +170,32 @@ func (o *SlogOptions) Apply() error {
 	}
 	slog.SetDefault(logger)
 	return nil
+}
+
+type TraceIDHandler struct {
+	slog.Handler
+}
+
+// Handle handles the Record. It checks for a trace_id in the context
+// and adds it as an attribute if present.
+func (h *TraceIDHandler) Handle(ctx context.Context, r slog.Record) error {
+	spanContext := trace.SpanContextFromContext(ctx)
+	if spanContext.IsValid() {
+		r.AddAttrs(slog.String("trace.id", spanContext.TraceID().String()))
+		r.AddAttrs(slog.String("span.id", spanContext.SpanID().String()))
+	}
+
+	return h.Handler.Handle(ctx, r)
+}
+
+// WithAttrs returns a new TraceIDHandler whose attributes consist of
+// both the receiver's attributes and the arguments.
+func (h *TraceIDHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &TraceIDHandler{Handler: h.Handler.WithAttrs(attrs)}
+}
+
+// WithGroup returns a new TraceIDHandler with the given group appended to
+// the receiver's existing groups.
+func (h *TraceIDHandler) WithGroup(name string) slog.Handler {
+	return &TraceIDHandler{Handler: h.Handler.WithGroup(name)}
 }
