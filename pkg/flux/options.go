@@ -19,6 +19,14 @@ func WithMaxKeys[K Key, V any](maxKeys int64) Option[K, V] {
 	}
 }
 
+// WithNoExpiration configures the cache entries to never expire based on time.
+func WithNoExpiration[K Key, V any]() Option[K, V] {
+	return func(config *Config[K, V]) error {
+		config.TTL = 0
+		return nil
+	}
+}
+
 // WithTTL sets the time-to-live for cache entries
 func WithTTL[K Key, V any](ttl time.Duration) Option[K, V] {
 	return func(config *Config[K, V]) error {
