@@ -122,8 +122,7 @@ func Observability(opts ...Option) gin.HandlerFunc {
 		}
 
 		// Extract trace information early
-		span := trace.SpanFromContext(ctx)
-		spanCtx := span.SpanContext()
+		spanCtx := trace.SpanContextFromContext(ctx)
 
 		// Inject trace headers based on configuration (unless skipping tracing)
 		injectTraceHeaders(c, spanCtx, config)
@@ -154,6 +153,7 @@ func Observability(opts ...Option) gin.HandlerFunc {
 			"request": map[string]any{
 				"method": c.Request.Method,
 				"path":   c.Request.URL.Path,
+				"id":     spanCtx.TraceID().String(),
 			},
 			"response": map[string]any{
 				"status_code": c.Writer.Status(),
@@ -178,12 +178,10 @@ func Observability(opts ...Option) gin.HandlerFunc {
 		}
 
 		slog.Log(ctx, logLevel, "HTTP request completed",
-			"duration_sec", duration,
+			"event", map[string]any{"duration": duration},
 			"source", map[string]any{"ip": c.ClientIP()},
 			"http", httpData,
-			"user", map[string]any{"agent": c.Request.UserAgent()},
-			"trace", map[string]any{"id": spanCtx.TraceID().String()},
-			"span", map[string]any{"id": spanCtx.SpanID().String()},
+			"user_agent", map[string]any{"original": c.Request.UserAgent()},
 		)
 	}
 }

@@ -140,6 +140,13 @@ func (o *SlogOptions) BuildHandler() (slog.Handler, error) {
 		}
 	}
 
+	opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
+		if a.Key == slog.MessageKey {
+			a.Key = "message"
+		}
+		return a
+	}
+
 	var handler slog.Handler
 	switch o.Format {
 	case "json":
@@ -181,8 +188,10 @@ type TraceIDHandler struct {
 func (h *TraceIDHandler) Handle(ctx context.Context, r slog.Record) error {
 	spanContext := trace.SpanContextFromContext(ctx)
 	if spanContext.IsValid() {
-		r.AddAttrs(slog.String("trace.id", spanContext.TraceID().String()))
-		r.AddAttrs(slog.String("span.id", spanContext.SpanID().String()))
+		r.AddAttrs(
+			slog.Group("trace", slog.String("id", spanContext.TraceID().String())),
+			slog.Group("span", slog.String("id", spanContext.SpanID().String())),
+		)
 	}
 
 	return h.Handler.Handle(ctx, r)
