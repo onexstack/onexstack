@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 	"go.opentelemetry.io/otel/trace"
@@ -39,7 +40,7 @@ func NewSlogOptions() *SlogOptions {
 		Level:      "info",
 		AddSource:  false,
 		Format:     "text",
-		TimeFormat: "",
+		TimeFormat: time.RFC3339Nano,
 		Output:     "stdout",
 	}
 }
@@ -128,23 +129,37 @@ func (o *SlogOptions) BuildHandler() (slog.Handler, error) {
 	opts := &slog.HandlerOptions{
 		Level:     o.ToSlogLevel(),
 		AddSource: o.AddSource,
-	}
-
-	// Set custom time format for text handler
-	if o.Format == "text" && o.TimeFormat != "" {
-		opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
-			if a.Key == slog.TimeKey {
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			switch a.Key {
+			case slog.TimeKey:
 				return slog.String(slog.TimeKey, a.Value.Time().Format(o.TimeFormat))
+			case slog.MessageKey:
+				return slog.String("message", a.Value.String())
+			case slog.SourceKey:
+				if src, ok := a.Value.Any().(*slog.Source); ok {
+					return slog.Attr{
+						Key: "log",
+						Value: slog.GroupValue(
+							slog.Attr{
+								Key: "origin",
+								Value: slog.GroupValue(
+									slog.Attr{
+										Key: "file",
+										Value: slog.GroupValue(
+											slog.String("name", src.File),
+											slog.Int("line", src.Line),
+										),
+									},
+									slog.String("function", src.Function),
+								),
+							},
+						),
+					}
+				}
+			default:
 			}
 			return a
-		}
-	}
-
-	opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
-		if a.Key == slog.MessageKey {
-			a.Key = "message"
-		}
-		return a
+		},
 	}
 
 	var handler slog.Handler
