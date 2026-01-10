@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/onexstack/onexstack/pkg/logger"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // GORMLocker provides a distributed locking mechanism using GORM.
@@ -41,6 +42,8 @@ var _ Locker = (*GORMLocker)(nil)
 // NewGORMLocker initializes a new GORMLocker instance.
 func NewGORMLocker(db *gorm.DB, opts ...Option) (*GORMLocker, error) {
 	o := ApplyOptions(opts...)
+
+	db = db.Session(&gorm.Session{Logger: gormlogger.Discard})
 
 	if o.autoMigrate {
 		if err := db.AutoMigrate(&Lock{}); err != nil {
