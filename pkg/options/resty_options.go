@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5" // 引入 JWT 库
 	"github.com/spf13/pflag"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -55,8 +56,6 @@ type RestyOptions struct {
 	middlewares []resty.RequestMiddleware `json:"-" mapstructure:"-"`
 	// headers are default headers applied to the client.
 	headers map[string]string `json:"-" mapstructure:"-"`
-	// token used for Authorization header injection (internal use, replaced by Token field).
-	token string `json:"-" mapstructure:"-"`
 }
 
 // NewRestyOptions creates a RestyOptions with default parameters.
@@ -152,7 +151,6 @@ func (o *RestyOptions) WithHeaders(headers map[string]string) *RestyOptions {
 }
 
 // WithToken sets the token used to inject Authorization header by middleware.
-// This method updates both the public Token field and internal token field for backward compatibility.
 func (o *RestyOptions) WithToken(token string) *RestyOptions {
 	o.Token = token
 	return o
@@ -192,29 +190,55 @@ func (o *RestyOptions) WithTrace() *RestyOptions {
 	return o
 }
 
-// addTokenMiddleware adds a middleware that injects the Authorization header
-// on each request based on the Token field (with fallback to internal token field).
-func (o *RestyOptions) addTokenMiddleware() *RestyOptions {
-	mw := func(c *resty.Client, r *resty.Request) error {
-		if o.Token == "" {
-			return nil
-		}
-		r.SetHeader("Authorization", "Bearer "+o.Token)
-		return nil
+// generateJWT creates a signed JWT using SecretID as kid (and optionally iss/sub).
+func (o *RestyOptions) generateJWT() (string, error) {
+	claims := jwt.MapClaims{
+		"nbf": time.Now().Unix(),                    // token effective time
+		"exp": time.Now().Add(2 * time.Hour).Unix(), // token expiration time
+		"iat": time.Now().Unix(),                    // token issued at time
 	}
 
-	o.middlewares = append(o.middlewares, mw)
-	return o
+	// 1. Create Token object
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// 2. [Key modification] Set kid in Header
+	// token.Header is a map[string]interface{}
+	token.Header["kid"] = o.SecretID
+
+	// 3. Sign and generate string
+	return token.SignedString([]byte(o.SecretKey))
 }
 
-// addSecretMiddleware adds a middleware that injects secret-based authentication headers.
-func (o *RestyOptions) addSecretMiddleware() *RestyOptions {
+// addAuthMiddleware handles the authentication logic with priority:
+// 1. Dynamic JWT (if SecretID & SecretKey are present)
+// 2. Static Token (if Token is present)
+func (o *RestyOptions) addAuthMiddleware() *RestyOptions {
 	mw := func(c *resty.Client, r *resty.Request) error {
-		if o.SecretID == "" || o.SecretKey == "" {
-			return nil
+		var finalToken string
+
+		// Priority 1: Generate JWT from Secret Credentials
+		if o.SecretID != "" && o.SecretKey != "" {
+			var err error
+			finalToken, err = o.generateJWT()
+			if err != nil {
+				// Decide whether to block the request or fallback.
+				// Here we return error because bad config implies failed auth.
+				return fmt.Errorf("failed to generate jwt token: %w", err)
+			}
+			// Optional: Inject SecretID for tracing or auditing
+			r.SetHeader("X-Secret-ID", o.SecretID)
 		}
-		r.SetHeader("X-Secret-ID", o.SecretID)
-		r.SetHeader("X-Secret-Key", o.SecretKey)
+
+		// Priority 2: Use Static Token if JWT generation was skipped (no secrets)
+		if finalToken == "" && o.Token != "" {
+			finalToken = o.Token
+		}
+
+		// If we have a valid token (either generated or static), set the Authorization header
+		if finalToken != "" {
+			r.SetHeader("Authorization", "Bearer "+finalToken)
+		}
+
 		return nil
 	}
 
@@ -242,17 +266,10 @@ func (o *RestyOptions) applyToClient(client *resty.Client) {
 		client.SetBasicAuth(o.Username, o.Password)
 	}
 
-	// Add token middleware if token is provided
-	if o.Token != "" {
-		o.addTokenMiddleware()
-	}
+	// Apply combined authentication middleware (Secret JWT > Static Token)
+	o.addAuthMiddleware()
 
-	// Add secret-based authentication middleware if provided
-	if o.SecretID != "" && o.SecretKey != "" {
-		o.addSecretMiddleware()
-	}
-
-	// Apply middlewares (before request hook).
+	// Apply other middlewares (before request hook).
 	for _, mw := range o.middlewares {
 		client.AddRequestMiddleware(mw)
 	}
