@@ -12,8 +12,8 @@ type Options struct {
 	// LockName specifies the name of the lock used by the server.
 	LockName string `json:"lock-name" mapstructure:"lock-name"`
 
-	// HealthzPort is the port number for the health check endpoint.
-	HealthzPort int `json:"healthz-port" mapstructure:"healthz-port"`
+	// HealthzAddr is the address (host:port) for the health check endpoint.
+	HealthzAddr string `json:"healthz-addr" mapstructure:"healthz-addr"`
 
 	// MetricsAddr specifies the address (host:port) for the metrics server endpoint.
 	MetricsAddr string `json:"metrics-addr" mapstructure:"metrics-addr"`
@@ -35,7 +35,7 @@ type Options struct {
 func NewOptions() *Options {
 	o := &Options{
 		LockName:        "default-distributed-watch-lock",
-		HealthzPort:     8881,
+		HealthzAddr:     ":8881",
 		MetricsAddr:     ":9090",
 		DisableWatchers: []string{},
 		MaxWorkers:      1000,
@@ -52,8 +52,8 @@ func (o *Options) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
 	fs.StringVar(&o.LockName, fullPrefix+".lock-name", o.LockName,
 		"The name of the lock used by the server.")
 
-	fs.IntVar(&o.HealthzPort, fullPrefix+".healthz-port", o.HealthzPort,
-		"The port number for the health check endpoint.")
+	fs.StringVar(&o.HealthzAddr, fullPrefix+".healthz-addr", o.HealthzAddr,
+		"The address (host:port) for the health check endpoint.")
 
 	fs.StringVar(&o.MetricsAddr, fullPrefix+".metrics-addr", o.MetricsAddr,
 		"The address (host:port) for the metrics server endpoint.")
@@ -78,11 +78,6 @@ func (o *Options) Validate() []error {
 	// Validate LockName
 	if o.LockName == "" {
 		errs = append(errs, errors.New("lock-name cannot be empty"))
-	}
-
-	// Validate HealthzPort
-	if o.HealthzPort < 0 || o.HealthzPort > 65535 {
-		errs = append(errs, errors.New("healthz-port must be between 0 and 65535"))
 	}
 
 	// Validate MaxWorkers

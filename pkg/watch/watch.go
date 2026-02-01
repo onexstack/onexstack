@@ -2,7 +2,6 @@ package watch
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -90,10 +89,10 @@ func WithLockName(lockName string) Option {
 	}
 }
 
-// WithHealthzPort returns an Option function that sets the health check port for the Watch.
-func WithHealthzPort(port int) Option {
+// WithHealthzAddr returns an Option function that sets the health check port for the Watch.
+func WithHealthzAddr(addr string) Option {
 	return func(w *Watch) {
-		w.options.HealthzPort = port
+		w.options.HealthzAddr = addr
 	}
 }
 
@@ -195,7 +194,7 @@ func (w *Watch) addWatchers() error {
 // Start attempts to acquire a distributed lock and starts the Cron job scheduler.
 // It retries acquiring the lock until successful.
 func (w *Watch) Start(stopCh <-chan struct{}) {
-	if w.options.HealthzPort != 0 {
+	if w.options.HealthzAddr != "" {
 		go w.serveHealthz()
 	}
 
@@ -261,13 +260,11 @@ func (w *Watch) serveHealthz() {
 	r := mux.NewRouter()
 	r.HandleFunc("/healthz", healthzHandler).Methods(http.MethodGet)
 
-	address := fmt.Sprintf("0.0.0.0:%d", w.options.HealthzPort)
-
-	if err := http.ListenAndServe(address, r); err != nil {
+	if err := http.ListenAndServe(w.options.HealthzAddr, r); err != nil {
 		w.logger.Error(err, "Error serving health check endpoint")
 	}
 
-	w.logger.Info("Successfully started health check server", "address", address)
+	w.logger.Info("Successfully started health check server", "address", w.options.HealthzAddr)
 }
 
 // healthzHandler handles the health check requests for the service.
