@@ -17,7 +17,7 @@ import (
 // Server 定义所有服务器类型的接口.
 type Server interface {
 	// RunOrDie 运行服务器，如果运行失败会退出程序（OrDie的含义所在）.
-	RunOrDie()
+	RunOrDie(ctx context.Context)
 	// GracefulStop 方法用来优雅关停服务器。关停服务器时需要处理 context 的超时时间.
 	GracefulStop(ctx context.Context)
 }
@@ -25,7 +25,7 @@ type Server interface {
 // Serve starts the server and blocks until the context is canceled.
 // It ensures the server is gracefully shut down when the context is done.
 func Serve(ctx context.Context, srv Server) error {
-	go srv.RunOrDie()
+	go srv.RunOrDie(ctx)
 
 	// Block until the context is canceled or terminated.
 	<-ctx.Done()

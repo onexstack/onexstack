@@ -39,7 +39,7 @@ func NewGRPCServer(
 		return nil, err
 	}
 
-	if tlsOptions != nil && tlsOptions.UseTLS {
+	if tlsOptions != nil && tlsOptions.Enabled {
 		tlsConfig := tlsOptions.MustTLSConfig()
 		serverOptions = append(serverOptions, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}

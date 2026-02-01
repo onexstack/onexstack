@@ -1,4 +1,4 @@
-package watch
+package slog
 
 import (
 	"log/slog"

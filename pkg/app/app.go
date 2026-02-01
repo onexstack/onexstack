@@ -99,7 +99,7 @@ func WithHealthCheckFunc(fn HealthCheckFunc) Option {
 func WithDefaultHealthCheckFunc() Option {
 	fn := func() HealthCheckFunc {
 		return func() error {
-			go genericoptions.NewHealthOptions().ServeHealthCheck()
+			go genericoptions.NewHealthOptions().Serve()
 
 			return nil
 		}

@@ -37,7 +37,7 @@ func NewGRPCGatewayServer(
 	registerHandler func(mux *runtime.ServeMux, conn *grpc.ClientConn) error,
 ) (*GRPCGatewayServer, error) {
 	var tlsConfig *tls.Config
-	if tlsOptions != nil && tlsOptions.UseTLS {
+	if tlsOptions != nil && tlsOptions.Enabled {
 		tlsConfig = tlsOptions.MustTLSConfig()
 		tlsConfig.InsecureSkipVerify = true
 	}

@@ -50,7 +50,7 @@ func (o *HealthOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
 	fs.StringVar(&o.HealthCheckAddress, fullPrefix+".check-address", o.HealthCheckAddress, "Specifies liveness health check bind address.")
 }
 
-func (o *HealthOptions) ServeHealthCheck() {
+func (o *HealthOptions) Serve() {
 	r := mux.NewRouter()
 
 	r.HandleFunc(o.HealthCheckPath, handler).Methods(http.MethodGet)

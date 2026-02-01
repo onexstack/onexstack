@@ -1,27 +1,75 @@
 package empty
 
-import "github.com/onexstack/onexstack/pkg/logger"
+import (
+	"context"
 
-// emptyLogger is an implementation of the logger.Logger interface that performs no operations.
-// This can be useful in contexts where a logger is required but logging output is not desired.
-type emptyLogger struct{}
+	"github.com/onexstack/onexstack/pkg/logger"
+)
 
-// Ensure that emptyLogger implements the logger.Logger interface.
-var _ logger.Logger = (*emptyLogger)(nil)
+// EmptyLogger is a no-op (no-operation) implementation of the Logger interface.
+// It discards all log messages and attributes without producing any output.
+// This is useful for testing or when logging needs to be disabled.
+type EmptyLogger struct{}
 
-// NewLogger returns a new instance of an empty logger.
-func NewLogger() *emptyLogger {
-	return &emptyLogger{}
+// NewLogger returns a new instance of EmptyLogger.
+func NewLogger() logger.Logger {
+	return &EmptyLogger{}
 }
 
-// Debug logs a message at the Debug level. This implementation does nothing.
-func (l *emptyLogger) Debug(msg string, keysAndValues ...any) {}
+// Ensure EmptyLogger fully implements the Logger interface at compile time.
+var _ logger.Logger = (*EmptyLogger)(nil)
 
-// Warn logs a message at the Warn level. This implementation does nothing.
-func (l *emptyLogger) Warn(msg string, keysAndValues ...any) {}
+// Debug implements the Logger interface.
+// It effectively ignores the log message and attributes.
+func (l *EmptyLogger) Debug(_ string, _ ...any) {
+	// no-op
+}
 
-// Info logs a message at the Info level. This implementation does nothing.
-func (l *emptyLogger) Info(msg string, keysAndValues ...any) {}
+// Warn implements the Logger interface.
+// It effectively ignores the log message and attributes.
+func (l *EmptyLogger) Warn(_ string, _ ...any) {
+	// no-op
+}
 
-// Error logs a message at the Error level. This implementation does nothing.
-func (l *emptyLogger) Error(msg string, keysAndValues ...any) {}
+// Info implements the Logger interface.
+// It effectively ignores the log message and attributes.
+func (l *EmptyLogger) Info(_ string, _ ...any) {
+	// no-op
+}
+
+// Error implements the Logger interface.
+// It effectively ignores the log message and attributes.
+func (l *EmptyLogger) Error(_ string, _ ...any) {
+	// no-op
+}
+
+// DebugContext implements the Logger interface.
+// It ignores the context, message, and attributes.
+func (l *EmptyLogger) DebugContext(_ context.Context, _ string, _ ...any) {
+	// no-op
+}
+
+// WarnContext implements the Logger interface.
+// It ignores the context, message, and attributes.
+func (l *EmptyLogger) WarnContext(_ context.Context, _ string, _ ...any) {
+	// no-op
+}
+
+// InfoContext implements the Logger interface.
+// It ignores the context, message, and attributes.
+func (l *EmptyLogger) InfoContext(_ context.Context, _ string, _ ...any) {
+	// no-op
+}
+
+// ErrorContext implements the Logger interface.
+// It ignores the context, message, and attributes.
+func (l *EmptyLogger) ErrorContext(_ context.Context, _ string, _ ...any) {
+	// no-op
+}
+
+// With implements the Logger interface.
+// It returns the current logger instance unchanged, as accumulating attributes
+// on a no-op logger has no effect and allocating a new struct is unnecessary.
+func (l *EmptyLogger) With(_ ...any) logger.Logger {
+	return l
+}
