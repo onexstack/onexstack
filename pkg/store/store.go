@@ -81,7 +81,7 @@ func (s *Store[T]) Update(ctx context.Context, obj *T) error {
 func (s *Store[T]) Delete(ctx context.Context, opts *where.Options) error {
 	err := s.db(ctx, opts).Delete(new(T)).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		s.logger.Error(ctx, err, "Failed to delete object from database", "conditions", opts)
+		// s.logger.Error(ctx, err, "Failed to delete object from database")
 		return err
 	}
 	return nil
@@ -91,7 +91,7 @@ func (s *Store[T]) Delete(ctx context.Context, opts *where.Options) error {
 func (s *Store[T]) Get(ctx context.Context, opts *where.Options) (*T, error) {
 	var obj T
 	if err := s.db(ctx, opts).First(&obj).Error; err != nil {
-		s.logger.Error(ctx, err, "Failed to retrieve object from database", "conditions", opts)
+		s.logger.Error(ctx, err, "Failed to retrieve object from database")
 		return nil, err
 	}
 	return &obj, nil
@@ -101,7 +101,7 @@ func (s *Store[T]) Get(ctx context.Context, opts *where.Options) (*T, error) {
 func (s *Store[T]) List(ctx context.Context, opts *where.Options) (count int64, ret []*T, err error) {
 	err = s.db(ctx, opts).Order("id desc").Find(&ret).Offset(-1).Limit(-1).Count(&count).Error
 	if err != nil {
-		s.logger.Error(ctx, err, "Failed to list objects from database", "conditions", opts)
+		s.logger.Error(ctx, err, "Failed to list objects from database")
 	}
 	return
 }
