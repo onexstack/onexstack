@@ -2,7 +2,6 @@ package gin
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -42,11 +41,13 @@ const (
 	InjectNone
 )
 
-// ObservabilityOptions holds configuration for trace injection
+// ObservabilityOptions holds configuration for trace injection and logging
 type ObservabilityOptions struct {
 	TraceInjectionMode TraceInjectionMode
-	CustomTraceHeader  string   // Custom header name for trace ID
-	SkipPaths          []string // Paths to skip logging (supports wildcards)
+	CustomTraceHeader  string       // Custom header name for trace ID
+	SkipPaths          []string     // Paths to skip logging (supports wildcards)
+	Logger             *slog.Logger // Custom logger instance
+	DisableBodyLog     bool         // Force disable logging of request/response body
 }
 
 // Option is a functional option for configuring the middleware
@@ -70,6 +71,24 @@ func WithCustomTraceHeader(headerName string) Option {
 func WithSkipPaths(paths ...string) Option {
 	return func(o *ObservabilityOptions) {
 		o.SkipPaths = append(o.SkipPaths, paths...)
+	}
+}
+
+// WithLogger configures a custom slog.Logger.
+// If not provided, slog.Default() will be used.
+func WithLogger(logger *slog.Logger) Option {
+	return func(o *ObservabilityOptions) {
+		if logger != nil {
+			o.Logger = logger
+		}
+	}
+}
+
+// WithDisableBodyLog forces the middleware NOT to log request and response bodies,
+// even if the log level is Debug.
+func WithDisableBodyLog() Option {
+	return func(o *ObservabilityOptions) {
+		o.DisableBodyLog = true
 	}
 }
 
@@ -103,6 +122,8 @@ func Observability(opts ...Option) gin.HandlerFunc {
 	config := &ObservabilityOptions{
 		TraceInjectionMode: InjectTraceIDOnly,
 		SkipPaths:          []string{"/metrics"}, // Default skip /metrics
+		DisableBodyLog:     false,
+		Logger:             slog.Default(),
 	}
 
 	// Apply options
@@ -130,16 +151,20 @@ func Observability(opts ...Option) gin.HandlerFunc {
 		var requestBody string
 		var responseBuffer bytes.Buffer
 
-		// Only capture body if we're going to log and debug is enabled
-		isDebugLevel := isDebugEnabled()
+		// Only capture body if:
+		// 1. We're going to log (implied)
+		// 2. Debug is enabled for the logger
+		// 3. Body logging is NOT explicitly disabled
+		isDebugLevel := config.Logger.Enabled(ctx, slog.LevelDebug)
+		shouldLogBody := isDebugLevel && !config.DisableBodyLog
 
-		if isDebugLevel && c.Request.Body != nil {
+		if shouldLogBody && c.Request.Body != nil {
 			bodyBytes, _ := io.ReadAll(c.Request.Body)
 			requestBody = string(bodyBytes)
 			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		}
 
-		if isDebugLevel {
+		if shouldLogBody {
 			writer := &bodyCaptureWriter{ResponseWriter: c.Writer, body: &responseBuffer}
 			c.Writer = writer
 		}
@@ -160,7 +185,7 @@ func Observability(opts ...Option) gin.HandlerFunc {
 			},
 		}
 
-		if isDebugLevel {
+		if shouldLogBody {
 			httpData["request"].(map[string]any)["body"] = map[string]any{
 				"content": requestBody,
 				"bytes":   len(requestBody),
@@ -177,7 +202,8 @@ func Observability(opts ...Option) gin.HandlerFunc {
 			logLevel = slog.LevelDebug
 		}
 
-		slog.Log(ctx, logLevel, "HTTP request completed",
+		// Use the configured logger instance
+		config.Logger.Log(ctx, logLevel, "HTTP request completed",
 			"event", map[string]any{"duration": duration},
 			"source", map[string]any{"ip": c.ClientIP()},
 			"http", httpData,
@@ -347,9 +373,4 @@ type bodyCaptureWriter struct {
 func (w *bodyCaptureWriter) Write(b []byte) (int, error) {
 	w.body.Write(b)
 	return w.ResponseWriter.Write(b)
-}
-
-// isDebugEnabled checks if debug logging is enabled for the global logger
-func isDebugEnabled() bool {
-	return slog.Default().Enabled(context.Background(), slog.LevelDebug)
 }
