@@ -1,41 +1,49 @@
 package core
 
 import (
+	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/spf13/viper"
 )
 
-// OnInitialize 设置需要读取的配置文件名、环境变量，并将其内容读取到 viper 中.
-func OnInitialize(configFile *string, envPrefix string, loadDirs []string, defaultConfigName string) func() {
+// OnInitialize returns a function that initializes the application configuration using Viper.
+// It sets up the configuration file source, environment variable overrides, and handles loading errors.
+// This function is typically used with cobra.OnInitialize.
+func OnInitialize(cfgFile *string, envPrefix string, searchPaths []string, configName string) func() {
 	return func() {
-		if configFile != nil {
-			// 从命令行选项指定的配置文件中读取
-			viper.SetConfigFile(*configFile)
+		if cfgFile != nil && *cfgFile != "" {
+			// Use the specific config file defined by the flag.
+			viper.SetConfigFile(*cfgFile)
 		} else {
-			for _, dir := range loadDirs {
-				// 将 dir 目录加入到配置文件的搜索路径
-				viper.AddConfigPath(dir)
+			// Search for the config file in the provided paths.
+			for _, path := range searchPaths {
+				viper.AddConfigPath(path)
 			}
-
-			// 设置配置文件格式为 YAML
 			viper.SetConfigType("yaml")
-
-			// 配置文件名称（没有文件扩展名）
-			viper.SetConfigName(defaultConfigName)
+			viper.SetConfigName(configName)
 		}
 
-		// 读取匹配的环境变量
 		viper.AutomaticEnv()
-
-		// 设置环境变量前缀为 MINIBLOG
 		viper.SetEnvPrefix(envPrefix)
+		viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 
-		// 将 key 字符串中 '.' 和 '-' 替换为 '_'
-		replacer := strings.NewReplacer(".", "_", "-", "_")
-		viper.SetEnvKeyReplacer(replacer)
+		if err := viper.ReadInConfig(); err != nil {
+			if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+				// It is acceptable if the config file is missing, as we may rely solely on environment variables.
+				slog.Warn("Config file not found; falling back to defaults or environment variables", "err", err)
+			} else {
+				// If the config file exists but is invalid (e.g., syntax error), the application should fail fast.
+				slog.Error("Failed to parse config file", "err", err)
+				os.Exit(1)
+			}
+		}
 
-		// 读取配置文件。如果指定了配置文件名，则使用指定的配置文件，否则在注册的搜索路径中搜索
-		_ = viper.ReadInConfig()
+		if path := viper.ConfigFileUsed(); path != "" {
+			slog.Info("Using config file", "path", path)
+		} else {
+			slog.Info("No config file used")
+		}
 	}
 }

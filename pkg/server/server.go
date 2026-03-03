@@ -8,10 +8,9 @@ package server
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
-
-	"k8s.io/klog/v2"
 )
 
 // Server 定义所有服务器类型的接口.
@@ -31,7 +30,7 @@ func Serve(ctx context.Context, srv Server) error {
 	<-ctx.Done()
 
 	// Shutdown the server gracefully.
-	klog.InfoS("Shutting down server...")
+	slog.Info("shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -39,7 +38,7 @@ func Serve(ctx context.Context, srv Server) error {
 	// Gracefully stop the server.
 	srv.GracefulStop(ctx)
 
-	klog.InfoS("Server exited successfully.")
+	slog.Info("server exited successfully.")
 
 	return nil
 }

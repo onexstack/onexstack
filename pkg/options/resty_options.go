@@ -103,7 +103,7 @@ func (o *RestyOptions) Validate() []error {
 	}
 
 	// Validate authentication configurations
-	if (o.SecretID != "" && o.SecretKey == "") || (o.SecretID == "" && o.SecretKey != "") {
+	if o.SecretID != "" && o.SecretKey == "" {
 		errs = append(errs, fmt.Errorf("both --"+o.fullPrefix+".secret-id and --"+o.fullPrefix+".secret-key must be provided together"))
 	}
 

@@ -1,138 +1,47 @@
-// Copyright 2022 Lingfei Kong <colin404@foxmail.com>. All rights reserved.
-// Use of this source code is governed by a MIT style
-// license that can be found in the LICENSE file. The original repo for
-// this file is https://github.com/onexstack/onex.
-//
-
 package options
 
 import (
-	"fmt"
-	"path"
+	"time"
 
 	"github.com/spf13/pflag"
 )
 
+// Ensure the interface is implemented.
 var _ IOptions = (*SecureServingOptions)(nil)
 
-// SecureServingOptions contains configuration items related to HTTPS server startup.
+// SecureServingOptions defines the configuration for secure communication.
+// It adopts a "Smart Mode": CA, Cert, and Key fields can be either file paths
+// or the actual content (PEM string/Base64) itself.
 type SecureServingOptions struct {
-	BindAddress string `json:"bind-address"`
-	// BindPort is ignored when Listener is set, will serve HTTPS even with 0.
-	BindPort int `json:"bind-port"`
-	// Required set to true means that BindPort cannot be zero.
-	Required bool
-	// ServerCert is the TLS cert info for serving secure traffic
-	ServerCert GeneratableKeyCert `json:"tls"`
-	// AdvertiseAddress net.IP
+	// Addr is the address the server listens on (e.g. :443).
+	Addr string `json:"addr" mapstructure:"addr"`
 
-	fullPrefix string
+	// Timeout specifies the TLS timeout (e.g., for ReadHeaderTimeout).
+	Timeout time.Duration `json:"timeout" mapstructure:"timeout"`
+
+	*TLSOptions `json:",inline" mapstructure:",squash"`
 }
 
-// CertKey contains configuration items related to certificate.
-type CertKey struct {
-	// CertFile is a file containing a PEM-encoded certificate, and possibly the complete certificate chain
-	CertFile string `json:"cert-file"`
-	// KeyFile is a file containing a PEM-encoded private key for the certificate specified by CertFile
-	KeyFile string `json:"private-key-file"`
-}
-
-// GeneratableKeyCert contains configuration items related to certificate.
-type GeneratableKeyCert struct {
-	// CertKey allows setting an explicit cert/key file to use.
-	CertKey CertKey `json:"cert-key"`
-
-	// CertDirectory specifies a directory to write generated certificates to if CertFile/KeyFile aren't explicitly set.
-	// PairName is used to determine the filenames within CertDirectory.
-	// If CertDirectory and PairName are not set, an in-memory certificate will be generated.
-	CertDirectory string `json:"cert-dir"`
-	// PairName is the name which will be used with CertDirectory to make a cert and key filenames.
-	// It becomes CertDirectory/PairName.crt and CertDirectory/PairName.key
-	PairName string `json:"pair-name"`
-}
-
-// NewSecureServingOptions creates a SecureServingOptions object with default parameters.
+// NewSecureServingOptions creates a zero-value instance of SecureServingOptions with defaults.
 func NewSecureServingOptions() *SecureServingOptions {
 	return &SecureServingOptions{
-		BindAddress: "0.0.0.0",
-		BindPort:    8443,
-		Required:    true,
-		ServerCert: GeneratableKeyCert{
-			PairName:      "onex",
-			CertDirectory: "/var/run/onex",
-		},
+		Addr:       ":443",           // Set default port to 443
+		Timeout:    10 * time.Second, // Set default timeout to 10 seconds
+		TLSOptions: NewTLSOptions(),
 	}
 }
 
-// Validate is used to parse and validate the parameters entered by the user at
-// the command line when the program starts.
-func (s *SecureServingOptions) Validate() []error {
-	if s == nil {
-		return nil
-	}
-
-	errors := []error{}
-
-	if s.Required && s.BindPort < 1 || s.BindPort > 65535 {
-		errors = append(errors, fmt.Errorf("--"+s.fullPrefix+".bind-port %v must be between 1 and 65535, inclusive. It cannot be turned off with 0", s.BindPort))
-	} else if s.BindPort < 0 || s.BindPort > 65535 {
-		errors = append(errors, fmt.Errorf("--"+s.fullPrefix+".bind-port %v must be between 0 and 65535, inclusive. 0 for turning off secure port", s.BindPort))
-	}
-
-	return errors
+// Validate verifies the flags passed to SecureServingOptions.
+func (o *SecureServingOptions) Validate() []error {
+	errs := []error{}
+	errs = append(errs, o.TLSOptions.Validate()...)
+	return errs
 }
 
-// AddFlags adds flags related to HTTPS server for a specific APIServer to the
-// specified FlagSet.
-func (s *SecureServingOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
-	fs.StringVar(&s.BindAddress, fullPrefix+".bind-address", s.BindAddress, ""+
-		"The IP address on which to listen for the --"+fullPrefix+".bind-port port. The "+
-		"associated interface(s) must be reachable by the rest of the engine, and by CLI/web "+
-		"clients. If blank, all interfaces will be used (0.0.0.0 for all IPv4 interfaces and :: for all IPv6 interfaces).")
-	desc := "The port on which to serve HTTPS with authentication and authorization."
-	if s.Required {
-		desc += " It cannot be switched off with 0."
-	} else {
-		desc += " If 0, don't serve HTTPS at all."
-	}
-	fs.IntVar(&s.BindPort, fullPrefix+".bind-port", s.BindPort, desc)
+// AddFlags adds flags to the specified FlagSet.
+func (o *SecureServingOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
+	fs.StringVar(&o.Addr, fullPrefix+".addr", o.Addr, "The address the secure server listens on (e.g. :443).")
+	fs.DurationVar(&o.Timeout, fullPrefix+".timeout", o.Timeout, "Timeout for TLS connections.")
 
-	fs.StringVar(&s.ServerCert.CertDirectory, fullPrefix+".tls.cert-dir", s.ServerCert.CertDirectory, ""+
-		"The directory where the TLS certs are located. "+
-		"If --"+fullPrefix+".tls.cert-key.cert-file and --"+fullPrefix+".tls.cert-key.private-key-file are provided, "+
-		"this flag will be ignored.")
-
-	fs.StringVar(&s.ServerCert.PairName, fullPrefix+".tls.pair-name", s.ServerCert.PairName, ""+
-		"The name which will be used with --"+fullPrefix+".tls.cert-dir to make a cert and key filenames. "+
-		"It becomes <cert-dir>/<pair-name>.crt and <cert-dir>/<pair-name>.key")
-
-	fs.StringVar(&s.ServerCert.CertKey.CertFile, fullPrefix+".tls.cert-key.cert-file", s.ServerCert.CertKey.CertFile, ""+
-		"File containing the default x509 Certificate for HTTPS. (CA cert, if any, concatenated "+
-		"after server cert).")
-
-	fs.StringVar(&s.ServerCert.CertKey.KeyFile, fullPrefix+".tls.cert-key.private-key-file",
-		s.ServerCert.CertKey.KeyFile, ""+
-			"File containing the default x509 private key matching --"+fullPrefix+".tls.cert-key.cert-file.")
-}
-
-// Complete fills in any fields not set that are required to have valid data.
-func (s *SecureServingOptions) Complete() error {
-	if s == nil || s.BindPort == 0 {
-		return nil
-	}
-
-	keyCert := &s.ServerCert.CertKey
-	if len(keyCert.CertFile) != 0 || len(keyCert.KeyFile) != 0 {
-		return nil
-	}
-
-	if len(s.ServerCert.CertDirectory) > 0 {
-		if len(s.ServerCert.PairName) == 0 {
-			return fmt.Errorf("--" + s.fullPrefix + ".tls.pair-name is required if --" + s.fullPrefix + ".tls.cert-dir is set")
-		}
-		keyCert.CertFile = path.Join(s.ServerCert.CertDirectory, s.ServerCert.PairName+".crt")
-		keyCert.KeyFile = path.Join(s.ServerCert.CertDirectory, s.ServerCert.PairName+".key")
-	}
-
-	return nil
+	o.TLSOptions.AddFlags(fs, fullPrefix)
 }

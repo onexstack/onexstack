@@ -10,7 +10,9 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -19,7 +21,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/protojson"
-	"k8s.io/klog/v2"
 
 	genericoptions "github.com/onexstack/onexstack/pkg/options"
 )
@@ -31,14 +32,14 @@ type GRPCGatewayServer struct {
 
 // NewGRPCGatewayServer 创建一个新的 GRPC 网关服务器实例.
 func NewGRPCGatewayServer(
-	httpOptions *genericoptions.HTTPOptions,
+	insecureOptions *genericoptions.InsecureServingOptions,
 	grpcOptions *genericoptions.GRPCOptions,
-	tlsOptions *genericoptions.TLSOptions,
+	secureOptions *genericoptions.SecureServingOptions,
 	registerHandler func(mux *runtime.ServeMux, conn *grpc.ClientConn) error,
 ) (*GRPCGatewayServer, error) {
 	var tlsConfig *tls.Config
-	if tlsOptions != nil && tlsOptions.Enabled {
-		tlsConfig = tlsOptions.MustTLSConfig()
+	if secureOptions != nil && secureOptions.Enabled {
+		tlsConfig = secureOptions.MustTLSConfig()
 		tlsConfig.InsecureSkipVerify = true
 	}
 
@@ -56,7 +57,7 @@ func NewGRPCGatewayServer(
 
 	conn, err := grpc.NewClient(grpcOptions.Addr, dialOptions...)
 	if err != nil {
-		klog.ErrorS(err, "Failed to dial context")
+		slog.Error("failed to dial context", "error", err)
 		return nil, err
 	}
 
@@ -68,13 +69,13 @@ func NewGRPCGatewayServer(
 		},
 	}))
 	if err := registerHandler(gwmux, conn); err != nil {
-		klog.ErrorS(err, "Failed to register handler")
+		slog.Error("failed to register handler", "error", err)
 		return nil, err
 	}
 
 	return &GRPCGatewayServer{
 		srv: &http.Server{
-			Addr:      httpOptions.Addr,
+			Addr:      insecureOptions.Addr,
 			Handler:   gwmux,
 			TLSConfig: tlsConfig,
 		},
@@ -83,7 +84,7 @@ func NewGRPCGatewayServer(
 
 // RunOrDie 启动 GRPC 网关服务器并在出错时记录致命错误.
 func (s *GRPCGatewayServer) RunOrDie() {
-	klog.InfoS("Start to listening the incoming requests", "protocol", protocolName(s.srv), "addr", s.srv.Addr)
+	slog.Info("start to listening the incoming requests", "protocol", protocolName(s.srv), "addr", s.srv.Addr)
 	// 默认启动 HTTP 服务器
 	serveFn := func() error { return s.srv.ListenAndServe() }
 	if s.srv.TLSConfig != nil {
@@ -91,14 +92,15 @@ func (s *GRPCGatewayServer) RunOrDie() {
 	}
 
 	if err := serveFn(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		klog.Fatalf("Failed to server HTTP(s) server: %v", err)
+		slog.Error("failed to server HTTP(s) server", "error", err)
+		os.Exit(1)
 	}
 }
 
 // GracefulStop 优雅地关闭 GRPC 网关服务器.
 func (s *GRPCGatewayServer) GracefulStop(ctx context.Context) {
-	klog.InfoS("Gracefully stop HTTP(s) server")
+	slog.Info("gracefully stop HTTP(s) server")
 	if err := s.srv.Shutdown(ctx); err != nil {
-		klog.ErrorS(err, "HTTP(s) server forced to shutdown")
+		slog.Error("http(s) server forced to shutdown", "error", err)
 	}
 }

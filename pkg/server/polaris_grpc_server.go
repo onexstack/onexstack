@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"time"
 
@@ -16,7 +17,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
-	"k8s.io/klog/v2"
 
 	genericoptions "github.com/onexstack/onexstack/pkg/options"
 )
@@ -37,7 +37,7 @@ func NewPolarisServer(
 ) (*PolarisServer, error) {
 	lis, err := net.Listen("tcp", grpcOptions.Addr)
 	if err != nil {
-		klog.ErrorS(err, "Failed to listen")
+		slog.Error("failed to listen", "error", err)
 		return nil, err
 	}
 
@@ -79,15 +79,15 @@ func NewPolarisServer(
 
 // RunOrDie 启动 GRPC 服务器并在出错时记录致命错误.
 func (s *PolarisServer) RunOrDie() {
-	klog.InfoS("Start to listening the incoming requests", "protocol", "grpc", "addr", s.lis.Addr().String())
+	slog.Info("start to listening the incoming requests", "protocol", "grpc", "addr", s.lis.Addr().String())
 	if err := s.srv.Serve(s.lis); err != nil {
-		klog.Fatalf("Failed to serve grpc server: %v", err)
+		slog.Error("failed to serve grpc server", "error", err)
 	}
 }
 
 // GracefulStop 优雅地关闭 GRPC 服务器.
 func (s *PolarisServer) GracefulStop(ctx context.Context) {
-	klog.InfoS("Gracefully stop grpc server")
+	slog.Info("gracefully stop grpc server")
 	s.srv.Deregister()
 	s.srv.GracefulStop()
 }

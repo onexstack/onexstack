@@ -1,62 +1,126 @@
-// Copyright 2024 孔令飞 <colin404@foxmail.com>. All rights reserved.
-// Use of this source code is governed by a MIT style
-// license that can be found in the LICENSE file. The original repo for
-// this file is https://github.com/onexstack/miniblog. The professional
-// version of this repository is https://github.com/onexstack/onex.
-
 package server
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"log/slog"
 	"net/http"
 	"os"
 
 	genericoptions "github.com/onexstack/onexstack/pkg/options"
+	"golang.org/x/sync/errgroup"
 )
 
-// HTTPServer 代表一个 HTTP 服务器.
+// HTTPServer represents an HTTP server that supports listening on both HTTP and HTTPS simultaneously.
 type HTTPServer struct {
-	srv *http.Server
+	insecureServer *http.Server
+	secureServer   *http.Server
 }
 
-// NewHTTPServer 创建一个新的 HTTP 服务器实例.
-func NewHTTPServer(httpOptions *genericoptions.HTTPOptions, tlsOptions *genericoptions.TLSOptions, handler http.Handler) *HTTPServer {
-	var tlsConfig *tls.Config
-	if tlsOptions != nil && tlsOptions.Enabled {
-		tlsConfig = tlsOptions.MustTLSConfig()
+// NewHTTPServer creates a new instance of HTTPServer.
+func NewHTTPServer(
+	insecureOptions *genericoptions.InsecureServingOptions,
+	secureOptions *genericoptions.SecureServingOptions,
+	handler http.Handler,
+) *HTTPServer {
+	s := &HTTPServer{}
+
+	// 1. Initialize insecure HTTP server (if address is configured)
+	if insecureOptions != nil && insecureOptions.Addr != "" {
+		s.insecureServer = &http.Server{
+			Addr:              insecureOptions.Addr,
+			Handler:           handler,
+			ReadHeaderTimeout: insecureOptions.Timeout,
+			ReadTimeout:       insecureOptions.Timeout,
+			WriteTimeout:      insecureOptions.Timeout,
+			IdleTimeout:       3 * insecureOptions.Timeout, // Typically IdleTimeout is longer
+		}
 	}
 
-	return &HTTPServer{
-		srv: &http.Server{
-			Addr:      httpOptions.Addr,
-			Handler:   handler,
-			TLSConfig: tlsConfig,
-		},
+	// 2. Initialize secure HTTPS server (if configured and enabled)
+	if secureOptions != nil && secureOptions.Enabled {
+		tlsConfig := secureOptions.MustTLSConfig()
+		s.secureServer = &http.Server{
+			Addr:              secureOptions.Addr,
+			Handler:           handler,
+			TLSConfig:         tlsConfig,
+			ReadHeaderTimeout: secureOptions.Timeout,
+			ReadTimeout:       secureOptions.Timeout,
+			WriteTimeout:      secureOptions.Timeout,
+			IdleTimeout:       3 * secureOptions.Timeout, // Typically IdleTimeout is longer
+		}
 	}
+
+	return s
 }
 
-// RunOrDie 启动 HTTP 服务器并在出错时记录致命错误.
+// Run starts the servers. Unlike os.Exit, it returns an error to be handled by the caller,
+// which is more idiomatic in Go.
+func (s *HTTPServer) Run(ctx context.Context) error {
+	eg, _ := errgroup.WithContext(ctx)
+
+	// Start HTTP server
+	if s.insecureServer != nil {
+		slog.Info("starting insecure HTTP server", "addr", s.insecureServer.Addr)
+		eg.Go(func() error {
+			if err := s.insecureServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("failed to start insecure HTTP server", "error", err)
+				return err
+			}
+			return nil
+		})
+	}
+
+	// Start HTTPS server
+	if s.secureServer != nil {
+		slog.Info("starting secure HTTPS server", "addr", s.secureServer.Addr)
+		eg.Go(func() error {
+			// Key/Cert file paths are usually handled when loading TLSConfig, or passed here.
+			// Since TLSConfig already contains the certificates (via GetCertificate or Certificates),
+			// we pass empty strings here.
+			if err := s.secureServer.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("failed to start secure HTTPS server", "error", err)
+				return err
+			}
+			return nil
+		})
+	}
+
+	// Block and wait until one of the servers fails or the Context is canceled.
+	// If it returns nil, it means a normal shutdown (http.ErrServerClosed was ignored).
+	return eg.Wait()
+}
+
+// RunOrDie is a wrapper for compatibility that keeps the original signature.
 func (s *HTTPServer) RunOrDie(ctx context.Context) {
-	slog.Info("Start to listening the incoming requests", "protocol", protocolName(s.srv), "addr", s.srv.Addr)
-	// 默认启动 HTTP 服务器
-	serveFn := func() error { return s.srv.ListenAndServe() }
-	if s.srv.TLSConfig != nil {
-		serveFn = func() error { return s.srv.ListenAndServeTLS("", "") }
-	}
-
-	if err := serveFn(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		slog.Error("Failed to server HTTP(s) serverv", "error", err)
+	if err := s.Run(ctx); err != nil {
 		os.Exit(1)
 	}
 }
 
-// GracefulStop 优雅地关闭 HTTP 服务器.
+// GracefulStop gracefully stops all servers.
 func (s *HTTPServer) GracefulStop(ctx context.Context) {
-	slog.Info("Gracefully stop HTTP(s) server")
-	if err := s.srv.Shutdown(ctx); err != nil {
-		slog.Error("HTTP(s) server forced to shutdown", "error", err)
+	slog.Info("gracefully stopping HTTP(s) servers")
+
+	// Use errgroup for concurrent shutdown to improve efficiency.
+	eg, ctx := errgroup.WithContext(ctx)
+
+	if s.insecureServer != nil {
+		eg.Go(func() error {
+			return s.insecureServer.Shutdown(ctx)
+		})
+	}
+
+	if s.secureServer != nil {
+		eg.Go(func() error {
+			return s.secureServer.Shutdown(ctx)
+		})
+	}
+
+	// Wait for all shutdowns to complete.
+	if err := eg.Wait(); err != nil {
+		slog.Error("one or more servers failed to shutdown gracefully", "error", err)
+	} else {
+		slog.Info("all servers stopped successfully")
 	}
 }

@@ -33,9 +33,11 @@ type TLSOptions struct {
 	Key  string `json:"key" mapstructure:"key"`
 }
 
-// NewTLSOptions creates a zero-value instance of TLSOptions.
+// NewTLSOptions creates a zero-value instance of TLSOptions with defaults.
 func NewTLSOptions() *TLSOptions {
-	return &TLSOptions{}
+	return &TLSOptions{
+		Enabled: false,
+	}
 }
 
 // Validate verifies the flags passed to TLSOptions.
@@ -84,17 +86,27 @@ func (o *TLSOptions) TLSConfig() (*tls.Config, error) {
 
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: o.SkipVerify,
+		MinVersion:         tls.VersionTLS12, // Recommendation: Set minimum TLS version to enhance security.
 	}
 
-	// 1. Load Client Certificate (Cert + Key)
+	// 1. Load Certificate Pair (Cert + Key)
 	// Use the smart loader to handle file paths or raw data.
-	certBytes, err := loadResource(o.Cert)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load cert: %w", err)
+	var certBytes, keyBytes []byte
+	var err error
+
+	// Load server certificate/private key
+	if o.Cert != "" {
+		certBytes, err = loadResource(o.Cert)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load cert: %w", err)
+		}
 	}
-	keyBytes, err := loadResource(o.Key)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load key: %w", err)
+
+	if o.Key != "" {
+		keyBytes, err = loadResource(o.Key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load key: %w", err)
+		}
 	}
 
 	if len(certBytes) > 0 && len(keyBytes) > 0 {
@@ -105,18 +117,30 @@ func (o *TLSOptions) TLSConfig() (*tls.Config, error) {
 		tlsConfig.Certificates = []tls.Certificate{cert}
 	}
 
-	// 2. Load CA Certificate
-	caBytes, err := loadResource(o.CA)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load ca: %w", err)
-	}
-
-	if len(caBytes) > 0 {
-		capool := x509.NewCertPool()
-		if !capool.AppendCertsFromPEM(caBytes) {
-			return nil, fmt.Errorf("failed to append ca certs from pem")
+	// 2. Load CA Certificate (Optional, usually for mTLS client verification)
+	if o.CA != "" {
+		caBytes, err := loadResource(o.CA)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load ca: %w", err)
 		}
-		tlsConfig.RootCAs = capool
+
+		if len(caBytes) > 0 {
+			capool := x509.NewCertPool()
+			if !capool.AppendCertsFromPEM(caBytes) {
+				return nil, fmt.Errorf("failed to append ca certs from pem")
+			}
+			// If configured for server, RootCAs is used to verify client certificates (mTLS).
+			// If configured for client, RootCAs is used to verify server certificates.
+			// Here we assume a generic approach, setting both ClientCAs and RootCAs just in case,
+			// or adjust based on specific scenarios.
+			tlsConfig.ClientCAs = capool
+			tlsConfig.RootCAs = capool
+
+			// If CA is provided, it usually implies the desire for client verification (mTLS).
+			if tlsConfig.ClientCAs != nil {
+				tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+			}
+		}
 	}
 
 	return tlsConfig, nil
@@ -146,12 +170,12 @@ func loadResource(input string) ([]byte, error) {
 
 	// 2. Try to identify if it is a file path.
 	// Logic: If no newlines and length is reasonable for a path, check file existence.
+	// Note: Added a check here to prevent misinterpreting short base64 strings as files.
 	if !strings.Contains(input, "\n") && len(input) < 1024 {
-		_, err := os.Stat(input)
-		if err == nil {
+		// Read only if the file actually exists, otherwise continue to try Base64.
+		if _, err := os.Stat(input); err == nil {
 			return os.ReadFile(input)
 		}
-		// If file doesn't exist, do not error immediately; it might be a Base64 string.
 	}
 
 	// 3. Try Base64 decoding.

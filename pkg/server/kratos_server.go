@@ -8,6 +8,8 @@ package server
 
 import (
 	"context"
+	"log/slog"
+	"os"
 
 	"github.com/go-kratos/kratos/contrib/registry/consul/v2"
 	"github.com/go-kratos/kratos/contrib/registry/etcd/v2"
@@ -18,7 +20,6 @@ import (
 	consulapi "github.com/hashicorp/consul/api"
 	krtlogger "github.com/onexstack/onexstack/pkg/logger/klog/kratos"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"k8s.io/klog/v2"
 
 	genericoptions "github.com/onexstack/onexstack/pkg/options"
 )
@@ -52,16 +53,17 @@ func NewKratosServer(cfg KratosAppConfig, servers ...transport.Server) (*KratosS
 }
 
 func (s *KratosServer) RunOrDie() {
-	klog.InfoS("Start to listening the incoming requests", "protocol", "kratos")
+	slog.Info("start to listening the incoming requests", "protocol", "kratos")
 	if err := s.kapp.Run(); err != nil {
-		klog.Fatalf("Failed to serve kratos application: %v", err)
+		slog.Error("failed to serve kratos application", "error", err)
+		os.Exit(1)
 	}
 }
 
 func (s *KratosServer) GracefulStop(ctx context.Context) {
-	klog.InfoS("Gracefully stop kratos application")
+	slog.Info("gracefully stop kratos application")
 	if err := s.kapp.Stop(); err != nil {
-		klog.ErrorS(err, "Failed to gracefully shutdown kratos application")
+		slog.Error("Failed to gracefully shutdown kratos application", "error", err)
 	}
 }
 
