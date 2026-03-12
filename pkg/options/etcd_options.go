@@ -21,7 +21,7 @@ type EtcdOptions struct {
 	DialTimeout time.Duration `json:"dial-timeout"         mapstructure:"dial-timeout"`
 	Username    string        `json:"username"                mapstructure:"username"`
 	Password    string        `json:"password"                mapstructure:"password"`
-	TLSOptions  *TLSOptions   `json:"tls"               mapstructure:"tls"`
+	TLSOptions  TLSOptions    `json:"tls"               mapstructure:"tls"`
 }
 
 // NewEtcdOptions create a `zero` value instance.

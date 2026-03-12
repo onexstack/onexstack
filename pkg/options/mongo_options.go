@@ -28,7 +28,7 @@ type MongoOptions struct {
 	Username   string        `json:"username" mapstructure:"username"`
 	Password   string        `json:"password" mapstructure:"password"`
 	Timeout    time.Duration `json:"timeout" mapstructure:"timeout"`
-	TLSOptions *TLSOptions   `json:"tls" mapstructure:"tls"`
+	TLSOptions TLSOptions    `json:"tls" mapstructure:"tls"`
 }
 
 // NewMongoOptions create a `zero` value instance.
@@ -55,7 +55,7 @@ func (o *MongoOptions) Validate() []error {
 		errs = append(errs, fmt.Errorf("--mongo.collection can not be empty"))
 	}
 
-	if o.TLSOptions != nil {
+	if o.TLSOptions.Enabled {
 		errs = append(errs, o.TLSOptions.Validate()...)
 	}
 
@@ -90,7 +90,7 @@ func (o *MongoOptions) NewClient() (*mongo.Client, error) {
 		})
 	}
 
-	if o.TLSOptions != nil {
+	if o.TLSOptions.Enabled {
 		tlsConf, err := o.TLSOptions.TLSConfig()
 		if err != nil {
 			return nil, err

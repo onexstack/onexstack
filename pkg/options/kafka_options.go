@@ -107,7 +107,7 @@ type KafkaOptions struct {
 	Topic         string        `mapstructure:"topic"`
 	ClientID      string        `mapstructure:"client-id"`
 	Timeout       time.Duration `mapstructure:"timeout"`
-	TLSOptions    *TLSOptions   `mapstructure:"tls"`
+	TLSOptions    TLSOptions    `mapstructure:"tls"`
 	SASLMechanism string        `mapstructure:"mechanism"`
 	Username      string        `mapstructure:"username"`
 	Password      string        `mapstructure:"password"`

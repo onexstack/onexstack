@@ -19,7 +19,7 @@ type SecureServingOptions struct {
 	// Timeout specifies the TLS timeout (e.g., for ReadHeaderTimeout).
 	Timeout time.Duration `json:"timeout" mapstructure:"timeout"`
 
-	*TLSOptions `json:",inline" mapstructure:",squash"`
+	TLSOptions `json:",inline" mapstructure:",squash"`
 }
 
 // NewSecureServingOptions creates a zero-value instance of SecureServingOptions with defaults.

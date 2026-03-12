@@ -34,8 +34,8 @@ type TLSOptions struct {
 }
 
 // NewTLSOptions creates a zero-value instance of TLSOptions with defaults.
-func NewTLSOptions() *TLSOptions {
-	return &TLSOptions{
+func NewTLSOptions() TLSOptions {
+	return TLSOptions{
 		Enabled: false,
 	}
 }
