@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -71,6 +72,7 @@ func (o *TLSOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
 func (o *TLSOptions) MustTLSConfig() *tls.Config {
 	tlsConf, err := o.TLSConfig()
 	if err != nil {
+		slog.Error("Failed to build tls config", "error", err)
 		// In production, you might want to panic or log the error.
 		// Returning a default insecure config here is for fail-safe scenarios.
 		return &tls.Config{InsecureSkipVerify: true}

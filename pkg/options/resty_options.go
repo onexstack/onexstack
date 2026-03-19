@@ -2,6 +2,7 @@ package options
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/url"
 	"time"
@@ -56,6 +57,8 @@ type RestyOptions struct {
 	middlewares []resty.RequestMiddleware `json:"-" mapstructure:"-"`
 	// headers are default headers applied to the client.
 	headers map[string]string `json:"-" mapstructure:"-"`
+	// tlsConfig holds the TLS configuration for the client.
+	tlsConfig *tls.Config `json:"-" mapstructure:"-"`
 }
 
 // NewRestyOptions creates a RestyOptions with default parameters.
@@ -129,6 +132,12 @@ func (o *RestyOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
 	fs.StringVar(&o.Username, fullPrefix+".username", o.Username, "Username for basic authentication.")
 	fs.StringVar(&o.Password, fullPrefix+".password", o.Password, "Password for basic authentication.")
 	fs.StringVar(&o.Token, fullPrefix+".token", o.Token, "Bearer token for authentication.")
+}
+
+// WithTLS sets the TLS configuration for the resty client.
+func (o *RestyOptions) WithTLS(config *tls.Config) *RestyOptions {
+	o.tlsConfig = config
+	return o
 }
 
 // WithMiddlewares sets the request middlewares to be applied on each new request.
@@ -255,6 +264,10 @@ func (o *RestyOptions) applyToClient(client *resty.Client) {
 		SetLogger(restylogger.NewLogger()).
 		// Default User-Agent
 		SetHeader("User-Agent", o.UserAgent)
+
+	if o.tlsConfig != nil {
+		client.SetTLSClientConfig(o.tlsConfig)
+	}
 
 	// Apply custom headers (overrides existing ones with same key).
 	if len(o.headers) > 0 {
