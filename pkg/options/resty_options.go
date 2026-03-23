@@ -2,7 +2,6 @@ package options
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net/url"
 	"time"
@@ -48,6 +47,8 @@ type RestyOptions struct {
 	// Token for bearer token authentication.
 	Token string `json:"token" mapstructure:"token"`
 
+	TLSOptions TLSOptions `json:"tls"               mapstructure:"tls"`
+
 	// TraceContextProvider returns a context used for trace propagation.
 	// If nil, context.Background() will be used.
 	TraceContextProvider func() context.Context `json:"-"`
@@ -57,23 +58,15 @@ type RestyOptions struct {
 	middlewares []resty.RequestMiddleware `json:"-" mapstructure:"-"`
 	// headers are default headers applied to the client.
 	headers map[string]string `json:"-" mapstructure:"-"`
-	// tlsConfig holds the TLS configuration for the client.
-	tlsConfig *tls.Config `json:"-" mapstructure:"-"`
 }
 
 // NewRestyOptions creates a RestyOptions with default parameters.
 func NewRestyOptions() *RestyOptions {
 	return &RestyOptions{
-		Endpoint:   "",
 		UserAgent:  "onexstack",
-		Debug:      false,
 		Timeout:    30 * time.Second,
 		RetryCount: 3,
-		SecretID:   "",
-		SecretKey:  "",
-		Username:   "",
-		Password:   "",
-		Token:      "",
+		TLSOptions: NewTLSOptions(),
 		headers: map[string]string{
 			"Content-Type": "application/json",
 		},
@@ -114,6 +107,8 @@ func (o *RestyOptions) Validate() []error {
 		errs = append(errs, fmt.Errorf("both --"+o.fullPrefix+".username and --"+o.fullPrefix+".password must be provided together"))
 	}
 
+	errs = append(errs, o.TLSOptions.Validate()...)
+
 	return errs
 }
 
@@ -121,6 +116,7 @@ func (o *RestyOptions) Validate() []error {
 func (o *RestyOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
 	o.fullPrefix = fullPrefix
 
+	o.TLSOptions.AddFlags(fs, fullPrefix+".tls")
 	fs.StringVar(&o.Endpoint, fullPrefix+".endpoint", o.Endpoint, "Base URL of the target API server.")
 	fs.StringVar(&o.UserAgent, fullPrefix+".user-agent", o.UserAgent, "Used to specify the Resty client User-Agent.")
 	fs.BoolVar(&o.Debug, fullPrefix+".debug", o.Debug, "Enables the debug mode on Resty client (string-based).")
@@ -134,9 +130,9 @@ func (o *RestyOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
 	fs.StringVar(&o.Token, fullPrefix+".token", o.Token, "Bearer token for authentication.")
 }
 
-// WithTLS sets the TLS configuration for the resty client.
-func (o *RestyOptions) WithTLS(config *tls.Config) *RestyOptions {
-	o.tlsConfig = config
+// WithTLS sets the TLS transport options.
+func (o *RestyOptions) WithTLS(tlsOptions TLSOptions) *RestyOptions {
+	o.TLSOptions = tlsOptions
 	return o
 }
 
@@ -199,22 +195,18 @@ func (o *RestyOptions) WithTrace() *RestyOptions {
 	return o
 }
 
-// generateJWT creates a signed JWT using SecretID as kid (and optionally iss/sub).
+// generateJWT creates a signed JWT using SecretID as kid.
 func (o *RestyOptions) generateJWT() (string, error) {
+	now := time.Now()
 	claims := jwt.MapClaims{
-		"nbf": time.Now().Unix(),                    // token effective time
-		"exp": time.Now().Add(2 * time.Hour).Unix(), // token expiration time
-		"iat": time.Now().Unix(),                    // token issued at time
+		"nbf": now.Unix(),
+		"exp": now.Add(2 * time.Hour).Unix(),
+		"iat": now.Unix(),
 	}
 
-	// 1. Create Token object
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	// 2. [Key modification] Set kid in Header
-	// token.Header is a map[string]interface{}
 	token.Header["kid"] = o.SecretID
 
-	// 3. Sign and generate string
 	return token.SignedString([]byte(o.SecretKey))
 }
 
@@ -265,8 +257,8 @@ func (o *RestyOptions) applyToClient(client *resty.Client) {
 		// Default User-Agent
 		SetHeader("User-Agent", o.UserAgent)
 
-	if o.tlsConfig != nil {
-		client.SetTLSClientConfig(o.tlsConfig)
+	if o.TLSOptions.Enabled {
+		client.SetTLSClientConfig(o.TLSOptions.MustTLSConfig())
 	}
 
 	// Apply custom headers (overrides existing ones with same key).
