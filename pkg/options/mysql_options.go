@@ -93,7 +93,8 @@ func (o *MySQLOptions) NewDB() (*gorm.DB, error) {
 		MaxIdleConnections:    o.MaxIdleConnections,
 		MaxOpenConnections:    o.MaxOpenConnections,
 		MaxConnectionLifeTime: o.MaxConnectionLifeTime,
-		Logger:                gormlogger.New(slog.Default()),
+		// Logger:                gormlogger.New(slog.Default(), gormlogger.WithLogLevel(logger.LogLevel(o.LogLevel))),
+		Logger: gormlogger.New(slog.Default()),
 	}
 
 	return db.NewMySQL(opts)

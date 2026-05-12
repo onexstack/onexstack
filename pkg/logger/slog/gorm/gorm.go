@@ -18,14 +18,46 @@ type SlogLogger struct {
 	IgnoreRecordNotFoundError bool            // Whether to ignore RecordNotFound errors
 }
 
+// Option defines a function signature for configuring SlogLogger.
+type Option func(*SlogLogger)
+
+// WithLogLevel sets the GORM log level.
+func WithLogLevel(level logger.LogLevel) Option {
+	return func(l *SlogLogger) {
+		l.LogLevel = level
+	}
+}
+
+// WithSlowThreshold sets the threshold for slow query warnings.
+func WithSlowThreshold(d time.Duration) Option {
+	return func(l *SlogLogger) {
+		l.SlowThreshold = d
+	}
+}
+
+// WithIgnoreRecordNotFoundError sets whether to ignore RecordNotFound errors.
+func WithIgnoreRecordNotFoundError(ignore bool) Option {
+	return func(l *SlogLogger) {
+		l.IgnoreRecordNotFoundError = ignore
+	}
+}
+
 // New returns a new SlogLogger instance with sensible defaults.
-func New(l *slog.Logger) *SlogLogger {
-	return &SlogLogger{
+// You can override defaults by passing Options.
+func New(l *slog.Logger, opts ...Option) *SlogLogger {
+	sl := &SlogLogger{
 		Logger:                    l,
 		LogLevel:                  logger.Info,
 		SlowThreshold:             200 * time.Millisecond,
 		IgnoreRecordNotFoundError: true,
 	}
+
+	// Apply all functional options
+	for _, opt := range opts {
+		opt(sl)
+	}
+
+	return sl
 }
 
 // LogMode changes the logger's log level and returns a new instance.
