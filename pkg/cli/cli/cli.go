@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 // SearchDirs returns the default directories to search for the configuration file.
@@ -22,4 +25,19 @@ func FilePath(defaultHomeDir string, defaultConfigName string) string {
 	// If the user's home directory cannot be retrieved, log an error and return an empty path.
 	cobra.CheckErr(err)
 	return filepath.Join(home, defaultHomeDir, defaultConfigName)
+}
+
+// UnmarshalFlags binds command-line flags to Viper and unmarshals the merged configuration into target.
+func UnmarshalFlags(flags *pflag.FlagSet, target any, opts ...viper.DecoderConfigOption) error {
+	if flags != nil {
+		if err := viper.BindPFlags(flags); err != nil {
+			return fmt.Errorf("failed to bind flags: %w", err)
+		}
+	}
+
+	if err := viper.Unmarshal(target, opts...); err != nil {
+		return fmt.Errorf("failed to unmarshal configuration: %w", err)
+	}
+
+	return nil
 }
