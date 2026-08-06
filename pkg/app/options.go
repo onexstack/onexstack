@@ -1,31 +1,56 @@
-// Copyright 2022 Lingfei Kong <colin404@foxmail.com>. All rights reserved.
+// Copyright 2024 Coling Kong <colin.kong@bitget.com>. All rights reserved.
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file. The original repo for
 // this file is https://github.com/onexstack/onex.
-//
 
 package app
 
 import (
 	"github.com/spf13/pflag"
-	cliflag "k8s.io/component-base/cli/flag"
 )
 
-// OptionsValidator provides methods to complete and validate options.
-// Any component requiring options validation should implement this interface.
+// OptionsValidator provides []error-style validation (matching pkg/options.IOptions).
 type OptionsValidator interface {
-	// Complete completes all the required options.
-	Complete() error
-
 	// Validate validates all the required options.
-	Validate() error
+	Validate() []error
 }
 
-// NamedFlagSetOptions provides access to server-specific flag sets and embeds the
-// validation functionality.
+// NamedFlagSet represents a named group of flags.
+type NamedFlagSet struct {
+	// Name is the section name for the flag group.
+	Name string
+	*pflag.FlagSet
+}
+
+// NamedFlagSets is a collection of named flag sets, organized by section name.
+// This is a self-defined replacement for k8s.io/component-base/cli/flag.NamedFlagSets.
+type NamedFlagSets struct {
+	FlagSets []NamedFlagSet
+}
+
+// NewNamedFlagSets creates a new NamedFlagSets collection.
+func NewNamedFlagSets() *NamedFlagSets {
+	return &NamedFlagSets{}
+}
+
+// FlagSet returns the flag set with the given name, creating it if needed.
+func (n *NamedFlagSets) FlagSet(name string) *pflag.FlagSet {
+	for _, f := range n.FlagSets {
+		if f.Name == name {
+			return f.FlagSet
+		}
+	}
+	fs := &pflag.FlagSet{}
+	fs.SetNormalizeFunc(pflag.CommandLine.GetNormalizeFunc())
+	n.FlagSets = append(n.FlagSets, NamedFlagSet{Name: name, FlagSet: fs})
+	return fs
+}
+
+// NamedFlagSetOptions provides access to named flag sets and embedding
+// the OptionsValidator interface for validation.
 type NamedFlagSetOptions interface {
-	// Flags returns flags for a specific server by section name.
-	Flags() cliflag.NamedFlagSets
+	// Flags returns the named flag sets for this options instance.
+	Flags() NamedFlagSets
 
 	OptionsValidator
 }
