@@ -10,76 +10,59 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// RecordSpanError 处理span错误并添加自定义属性
+// recordSpanError 是 span 错误记录的核心实现。
+// 它统一处理 nil 守卫、错误记录、状态设置与可选的结构化日志。
+// message 为空时，回退使用 err.Error()。
+func recordSpanError(ctx context.Context, span trace.Span, err error, message string, attrs []attribute.KeyValue, withLog bool) {
+	if err == nil {
+		return
+	}
+	if message == "" {
+		message = err.Error()
+	}
+
+	// 记录错误到 span（带/不带属性）
+	if len(attrs) > 0 {
+		span.RecordError(err, trace.WithAttributes(attrs...))
+	} else {
+		span.RecordError(err)
+	}
+
+	// 设置 span 状态
+	span.SetStatus(codes.Error, message)
+
+	// 可选：记录结构化日志
+	if withLog {
+		logAttrs := make([]any, 0, len(attrs)*2+2)
+		logAttrs = append(logAttrs, "error", err.Error())
+		for _, attr := range attrs {
+			logAttrs = append(logAttrs, string(attr.Key), attr.Value.AsInterface())
+		}
+		slog.ErrorContext(ctx, message, logAttrs...)
+	}
+}
+
+// RecordSpanError 处理 span 错误并添加自定义属性。
 func RecordSpanError(ctx context.Context, span trace.Span, err error, attrs ...attribute.KeyValue) {
-	// 记录错误到span（带属性）
-	if len(attrs) > 0 {
-		span.RecordError(err, trace.WithAttributes(attrs...))
-	} else {
-		span.RecordError(err)
-	}
-
-	// 设置span状态
-	span.SetStatus(codes.Error, err.Error())
+	recordSpanError(ctx, span, err, "", attrs, false)
 }
 
-// RecordSpanErrorWithLog 处理span错误、添加自定义属性并记录结构化日志
+// RecordSpanErrorWithLog 处理 span 错误、添加自定义属性并记录结构化日志。
 func RecordSpanErrorWithLog(ctx context.Context, span trace.Span, err error, message string, attrs ...attribute.KeyValue) {
-	// 1. 记录错误到span（带属性）
-	if len(attrs) > 0 {
-		span.RecordError(err, trace.WithAttributes(attrs...))
-	} else {
-		span.RecordError(err)
-	}
-
-	// 2. 设置span状态
-	span.SetStatus(codes.Error, message)
-
-	// 3. 构建日志属性
-	logAttrs := []any{"error", err.Error()}
-	for _, attr := range attrs {
-		logAttrs = append(logAttrs, string(attr.Key), attr.Value.AsInterface())
-	}
-
-	// 4. 记录结构化日志
-	slog.ErrorContext(ctx, message, logAttrs...)
+	recordSpanError(ctx, span, err, message, attrs, true)
 }
 
-// LogSpanError 简化版本 - 只需要提供错误，自动使用错误信息作为消息
+// LogSpanError 简化版本 - 只需要提供错误，自动使用错误信息作为消息。
 func LogSpanError(ctx context.Context, span trace.Span, err error, attrs ...attribute.KeyValue) {
-	RecordSpanErrorWithLog(ctx, span, err, err.Error(), attrs...)
+	recordSpanError(ctx, span, err, "", attrs, true)
 }
 
-// RecordSpanErrorf 格式化消息版本
+// RecordSpanErrorf 格式化消息版本。
 func RecordSpanErrorf(ctx context.Context, span trace.Span, err error, format string, args ...interface{}) {
-	message := fmt.Sprintf(format, args...)
-
-	// 记录错误到span
-	span.RecordError(err)
-	span.SetStatus(codes.Error, message)
-
-	// 记录日志
-	slog.ErrorContext(ctx, message, "error", err.Error())
+	recordSpanError(ctx, span, err, fmt.Sprintf(format, args...), nil, true)
 }
 
-// RecordSpanErrorfWithAttrs 格式化消息 + 自定义属性版本
+// RecordSpanErrorfWithAttrs 格式化消息 + 自定义属性版本。
 func RecordSpanErrorfWithAttrs(ctx context.Context, span trace.Span, err error, format string, args []interface{}, attrs ...attribute.KeyValue) {
-	message := fmt.Sprintf(format, args...)
-
-	// 记录错误到span（带属性）
-	if len(attrs) > 0 {
-		span.RecordError(err, trace.WithAttributes(attrs...))
-	} else {
-		span.RecordError(err)
-	}
-	span.SetStatus(codes.Error, message)
-
-	// 构建日志属性
-	logAttrs := []any{"error", err.Error()}
-	for _, attr := range attrs {
-		logAttrs = append(logAttrs, string(attr.Key), attr.Value.AsInterface())
-	}
-
-	// 记录结构化日志
-	slog.ErrorContext(ctx, message, logAttrs...)
+	recordSpanError(ctx, span, err, fmt.Sprintf(format, args...), attrs, true)
 }

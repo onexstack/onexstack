@@ -62,7 +62,7 @@ func TestCopyObj(t *testing.T) {
 
 	changed, err := CopyObj(org, des, []string{"A"})
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err)
 	}
 
 	if !changed {
@@ -80,7 +80,7 @@ func TestCopyObj(t *testing.T) {
 	des.A = org.A
 	changed, err = CopyObj(org, des, []string{"A"})
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err)
 	}
 
 	if changed {

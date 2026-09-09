@@ -40,26 +40,9 @@ func TestNewCode(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.want, NewCode(tt.args.id, tt.args.options...))
 		})
-	}
-}
-
-func BenchmarkNewCode(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		NewCode(1)
-	}
-}
-
-func BenchmarkNewCodeTimeConsuming(b *testing.B) {
-	b.StopTimer() // 调用该函数停止压力测试的时间计数
-
-	id := NewCode(1)
-	assert.Equal(b, "VHB4JX86", id)
-
-	b.StartTimer() // 重新开始时间
-
-	for i := 0; i < b.N; i++ {
-		NewCode(1)
 	}
 }

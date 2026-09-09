@@ -2,6 +2,12 @@ package errorsx
 
 import "net/http"
 
+// UnknownCode 表示无法识别错误类型时的默认 HTTP 状态码.
+const UnknownCode = http.StatusInternalServerError // 500
+
+// UnknownReason 表示无法识别错误类型时的默认原因.
+const UnknownReason = ""
+
 // errorsx 预定义标准的错误.
 var (
 	// OK 代表请求成功.

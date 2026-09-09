@@ -12,7 +12,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -82,8 +81,8 @@ func NewGRPCGatewayServer(
 	}, nil
 }
 
-// RunOrDie 启动 GRPC 网关服务器并在出错时记录致命错误.
-func (s *GRPCGatewayServer) RunOrDie() {
+// Run 启动 GRPC 网关服务器并阻塞直到服务器停止或出错.
+func (s *GRPCGatewayServer) Run(ctx context.Context) error {
 	slog.Info("start to listening the incoming requests", "protocol", protocolName(s.srv), "addr", s.srv.Addr)
 	// 默认启动 HTTP 服务器
 	serveFn := func() error { return s.srv.ListenAndServe() }
@@ -93,14 +92,17 @@ func (s *GRPCGatewayServer) RunOrDie() {
 
 	if err := serveFn(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("failed to server HTTP(s) server", "error", err)
-		os.Exit(1)
+		return err
 	}
+	return nil
 }
 
 // GracefulStop 优雅地关闭 GRPC 网关服务器.
-func (s *GRPCGatewayServer) GracefulStop(ctx context.Context) {
+func (s *GRPCGatewayServer) GracefulStop(ctx context.Context) error {
 	slog.Info("gracefully stop HTTP(s) server")
 	if err := s.srv.Shutdown(ctx); err != nil {
 		slog.Error("http(s) server forced to shutdown", "error", err)
+		return err
 	}
+	return nil
 }

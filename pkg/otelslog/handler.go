@@ -74,7 +74,12 @@ type config struct {
 }
 
 func newConfig(options []Option) config {
-	var c config
+	c := config{
+		// 默认不进行本地级别过滤，完全委托给底层 logger 的 Enabled 决定。
+		// 使用最低标准级别 Debug 作为默认值，避免零值 Info 误拦截 Debug/Trace，
+		// 从而破坏原版的委托语义与 context 传递（见 Enabled）。
+		level: slog.LevelDebug,
+	}
 	for _, opt := range options {
 		c = opt.apply(c)
 	}
@@ -204,7 +209,7 @@ type Handler struct {
 	attrs  *kvBuffer
 	group  *group
 	logger log.Logger
-	level  slog.Level // 添加最低日志级别��段
+	level  slog.Level // 最低日志级别，默认 Debug（即不过滤标准级别）
 
 	source bool
 }

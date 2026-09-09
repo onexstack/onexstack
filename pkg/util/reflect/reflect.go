@@ -26,13 +26,13 @@ func ToGormDBMap(obj any, fields []string) (map[string]any, error) {
 	for _, f := range fields {
 		fs, exist := reflectType.FieldByName(f)
 		if !exist {
-			return nil, fmt.Errorf("unknow field " + f)
+			return nil, fmt.Errorf("unknown field %s", f)
 		}
 
 		tagMap := parseTagSetting(fs.Tag)
 		gormfiled, exist := tagMap["COLUMN"]
 		if !exist {
-			return nil, fmt.Errorf("undef gorm field " + f)
+			return nil, fmt.Errorf("undefined gorm field %s", f)
 		}
 
 		ret[gormfiled] = reflectValue.FieldByName(f)

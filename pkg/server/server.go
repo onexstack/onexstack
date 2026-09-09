@@ -15,28 +15,46 @@ import (
 
 // Server 定义所有服务器类型的接口.
 type Server interface {
-	// RunOrDie 运行服务器，如果运行失败会退出程序（OrDie的含义所在）.
-	RunOrDie(ctx context.Context)
-	// GracefulStop 方法用来优雅关停服务器。关停服务器时需要处理 context 的超时时间.
-	GracefulStop(ctx context.Context)
+	// Run 运行服务器并阻塞，直到服务器停止（例如被 GracefulStop 关停）或出错.
+	// 正常关停时应返回 nil，出错时返回具体错误.
+	Run(ctx context.Context) error
+	// GracefulStop 优雅关停服务器，需处理 context 的超时时间.
+	GracefulStop(ctx context.Context) error
 }
 
-// Serve starts the server and blocks until the context is canceled.
-// It ensures the server is gracefully shut down when the context is done.
+// Serve starts the server and blocks until the context is canceled or the
+// server exits with an error. When the context is canceled, it gracefully shuts
+// the server down within a 10-second timeout budget.
 func Serve(ctx context.Context, srv Server) error {
-	go srv.RunOrDie(ctx)
+	// 在后台运行 server，捕获其返回的错误。缓冲为 1，避免 goroutine 泄漏.
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- srv.Run(ctx)
+	}()
 
-	// Block until the context is canceled or terminated.
-	<-ctx.Done()
+	// 阻塞直到 ctx 取消（正常关停）或 server 主动退出（出错或自行停止）.
+	select {
+	case err := <-errCh:
+		// server 在 ctx 取消前就已退出.
+		return err
+	case <-ctx.Done():
+		// 收到关停信号，继续执行优雅关停.
+	}
 
-	// Shutdown the server gracefully.
 	slog.Info("shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Gracefully stop the server.
-	srv.GracefulStop(ctx)
+	if err := srv.GracefulStop(shutdownCtx); err != nil {
+		slog.Error("failed to gracefully stop server", "err", err)
+	}
+
+	// 等待 Run 返回（通常因 GracefulStop 而返回 nil）.
+	if err := <-errCh; err != nil {
+		return err
+	}
 
 	slog.Info("server exited successfully.")
 

@@ -19,6 +19,12 @@ import (
 
 var _ IOptions = (*HealthOptions)(nil)
 
+// DefaultHealthCheckAddress 是内置健康检查服务的默认监听地址.
+const DefaultHealthCheckAddress = "0.0.0.0:20250"
+
+// DefaultHealthCheckPath 是内置健康检查服务的默认请求路径.
+const DefaultHealthCheckPath = "/healthz"
+
 // HealthOptions defines options for redis cluster.
 type HealthOptions struct {
 	// Enable debugging by exposing profiling information.
@@ -31,8 +37,8 @@ type HealthOptions struct {
 func NewHealthOptions() *HealthOptions {
 	return &HealthOptions{
 		HTTPProfile:        false,
-		HealthCheckPath:    "/healthz",
-		HealthCheckAddress: "0.0.0.0:20250",
+		HealthCheckPath:    DefaultHealthCheckPath,
+		HealthCheckAddress: DefaultHealthCheckAddress,
 	}
 }
 

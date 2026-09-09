@@ -9,7 +9,6 @@ package server
 import (
 	"context"
 	"log/slog"
-	"os"
 
 	"github.com/go-kratos/kratos/contrib/registry/consul/v2"
 	"github.com/go-kratos/kratos/contrib/registry/etcd/v2"
@@ -52,19 +51,25 @@ func NewKratosServer(cfg KratosAppConfig, servers ...transport.Server) (*KratosS
 	return &KratosServer{kapp: kapp}, nil
 }
 
-func (s *KratosServer) RunOrDie() {
+// Run 启动 Kratos 应用并阻塞直到停止或出错。kratos.App.Run 内部自行处理信号
+// 与生命周期，因此 ctx 参数此处暂不直接用于触发停止（保留以符合统一 Server 接口）.
+func (s *KratosServer) Run(ctx context.Context) error {
 	slog.Info("start to listening the incoming requests", "protocol", "kratos")
 	if err := s.kapp.Run(); err != nil {
 		slog.Error("failed to serve kratos application", "error", err)
-		os.Exit(1)
+		return err
 	}
+	return nil
 }
 
-func (s *KratosServer) GracefulStop(ctx context.Context) {
+// GracefulStop 优雅地关闭 Kratos 应用.
+func (s *KratosServer) GracefulStop(ctx context.Context) error {
 	slog.Info("gracefully stop kratos application")
 	if err := s.kapp.Stop(); err != nil {
 		slog.Error("Failed to gracefully shutdown kratos application", "error", err)
+		return err
 	}
+	return nil
 }
 
 func NewKratosLogger(id, name, version string) krtlog.Logger {

@@ -1,75 +1,81 @@
+// Copyright 2024 Coling Kong <colin.kong@bitget.com>. All rights reserved.
+// Use of this source code is governed by a MIT style
+// license that can be found in the LICENSE file. The original repo for
+// this file is https://github.com/onexstack/onex.
+
 package app
 
 import (
+	"context"
 	"fmt"
-	"path/filepath"
+	"log/slog"
 	"strings"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"k8s.io/client-go/util/homedir"
-	"k8s.io/klog/v2"
 )
 
-const configFlagName = "config"
-
-var cfgFile string
-
-// AddConfigFlag adds flags for a specific server to the specified FlagSet object.
-// It also sets a passed functions to read values from configuration file into viper
-// when each cobra command's Execute method is called.
-func AddConfigFlag(fs *pflag.FlagSet, name string, watch bool) {
-	fs.AddFlag(pflag.Lookup(configFlagName))
-
-	// Enable viper's automatic environment variable parsing. This means
-	// that viper will automatically read values corresponding to viper
-	// variables from environment variables.
-	viper.AutomaticEnv()
-	// Set the environment variable prefix. Use the strings.ReplaceAll function
-	// to replace hyphens with underscores in the name, and use strings.ToUpper
-	// to convert the name to uppercase, then set it as the prefix for environment variables.
-	viper.SetEnvPrefix(strings.ReplaceAll(strings.ToUpper(name), "-", "_"))
-	// Set the replacement rules for environment variable keys. Use the
-	// strings.NewReplacer function to specify replacing periods and hyphens with underscores.
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
-
-	cobra.OnInitialize(func() {
-		if cfgFile != "" {
-			viper.SetConfigFile(cfgFile)
-		} else {
-			viper.AddConfigPath(".")
-
-			if names := strings.Split(name, "-"); len(names) > 1 {
-				viper.AddConfigPath(filepath.Join(homedir.HomeDir(), "."+names[0]))
-				viper.AddConfigPath(filepath.Join("/etc", names[0]))
-			}
-
-			viper.SetConfigName(name)
-		}
-
-		if err := viper.ReadInConfig(); err != nil {
-			klog.V(2).InfoS("Failed to read configuration file", "file", cfgFile, "err", err)
-		}
-		klog.V(2).InfoS("Success to read configuration file", "file", viper.ConfigFileUsed())
-
-		if watch {
-			viper.WatchConfig()
-			viper.OnConfigChange(func(e fsnotify.Event) {
-				klog.V(2).InfoS("Config file changed", "name", e.Name)
-			})
-		}
-	})
+// addConfigFlag registers a --config/-c flag on the given persistent flag set.
+// Config loading itself happens in loadConfig during PersistentPreRunE, so each
+// app uses its own isolated viper instance with no global side effects.
+func (a *App) addConfigFlag(cmd *cobra.Command, fs *pflag.FlagSet) {
+	fs.StringVarP(
+		&a.cfgFile, "config", "c", "",
+		"Read configuration from specified FILE, support JSON, TOML, YAML, HCL, or Java properties formats.",
+	)
 }
 
-func PrintConfig() {
-	for _, key := range viper.AllKeys() {
-		klog.V(2).InfoS(fmt.Sprintf("CFG: %s=%v", key, viper.Get(key)))
+// loadConfig wires up and reads the configuration into the app's isolated
+// viper instance. It is called during PersistentPreRunE, after flags are
+// parsed, so flag values (including --config) are available.
+func (a *App) loadConfig() error {
+	if a.noConfig {
+		return nil
 	}
+
+	if a.cfgFile != "" {
+		a.v.SetConfigFile(a.cfgFile)
+	} else {
+		for _, p := range a.effectiveConfigSearchPaths() {
+			a.v.AddConfigPath(p)
+		}
+		a.v.SetConfigType("yaml")
+		a.v.SetConfigName(a.effectiveConfigName())
+	}
+
+	a.v.AutomaticEnv()
+	a.v.SetEnvPrefix(a.envPrefix)
+	a.v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+
+	if err := a.v.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			slog.Info("config file not found, using defaults and env vars", "searchPaths", a.effectiveConfigSearchPaths())
+		} else {
+			return fmt.Errorf("failed to parse config file: %w", err)
+		}
+	}
+
+	slog.Info("using config file", "path", a.v.ConfigFileUsed())
+
+	return nil
 }
 
-func init() {
-	pflag.StringVarP(&cfgFile, configFlagName, "c", cfgFile, "Read configuration from specified `FILE`, "+
-		"support JSON, TOML, YAML, HCL, or Java properties formats.")
+// printConfig logs all viper configuration keys at debug level. It is a no-op
+// (and cheap) when debug logging is disabled.
+func (a *App) printConfig() {
+	if !a.noConfig {
+		return
+	}
+
+	if !slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		return
+	}
+
+	keys := a.v.AllKeys()
+	attrs := make([]any, 0, len(keys)*2)
+	for _, key := range keys {
+		attrs = append(attrs, key, a.v.Get(key))
+	}
+	slog.Debug("configuration", attrs...)
 }

@@ -13,24 +13,24 @@ func NewCode(id uint64, options ...func(*CodeOptions)) string {
 		f(ops)
 	}
 	// enlarge and add salt
-	id = id*uint64(ops.n1) + ops.salt
+	id = id*uint64(ops.diffusionCoefficient) + ops.salt
 
-	var code []rune
-	slIdx := make([]byte, ops.l)
+	code := make([]rune, 0, ops.length)
+	slIdx := make([]byte, ops.length)
 
 	charLen := len(ops.chars)
 	charLenUI := uint64(charLen)
 
 	// diffusion
-	for i := 0; i < ops.l; i++ {
+	for i := 0; i < ops.length; i++ {
 		slIdx[i] = byte(id % charLenUI)                          // get each number
 		slIdx[i] = (slIdx[i] + byte(i)*slIdx[0]) % byte(charLen) // let units digit affect other digit
 		id /= charLenUI                                          // right shift
 	}
 
 	// confusion(https://en.wikipedia.org/wiki/Permutation_box)
-	for i := 0; i < ops.l; i++ {
-		idx := (byte(i) * byte(ops.n2)) % byte(ops.l)
+	for i := 0; i < ops.length; i++ {
+		idx := (byte(i) * byte(ops.confusionCoefficient)) % byte(ops.length)
 		code = append(code, ops.chars[slIdx[idx]])
 	}
 	return string(code)

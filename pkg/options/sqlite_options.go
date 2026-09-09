@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
 	"github.com/onexstack/onexstack/pkg/db"
 	gormlogger "github.com/onexstack/onexstack/pkg/logger/slog/gorm"
@@ -61,7 +62,7 @@ func (o *SQLiteOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
 		"Maximum number of open connections to SQLite.")
 	fs.DurationVar(&o.MaxConnectionLifeTime, fullPrefix+".max-connection-life-time", o.MaxConnectionLifeTime,
 		"Maximum lifetime of a SQLite database connection.")
-	fs.IntVar(&o.LogLevel, fullPrefix+".log-mode", o.LogLevel,
+	fs.IntVar(&o.LogLevel, fullPrefix+".log-level", o.LogLevel,
 		"Specify GORM log level.")
 }
 
@@ -87,7 +88,7 @@ func (o *SQLiteOptions) NewDB() (*gorm.DB, error) {
 		MaxIdleConnections:    o.MaxIdleConnections,
 		MaxOpenConnections:    o.MaxOpenConnections,
 		MaxConnectionLifeTime: o.MaxConnectionLifeTime,
-		Logger:                gormlogger.New(slog.Default()),
+		Logger:                gormlogger.New(slog.Default(), gormlogger.WithLogLevel(logger.LogLevel(o.LogLevel))),
 	}
 
 	return db.NewSQLite(opts)

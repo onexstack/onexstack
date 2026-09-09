@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"os"
 
 	genericoptions "github.com/onexstack/onexstack/pkg/options"
 	"golang.org/x/sync/errgroup"
@@ -91,15 +90,8 @@ func (s *HTTPServer) Run(ctx context.Context) error {
 	return eg.Wait()
 }
 
-// RunOrDie is a wrapper for compatibility that keeps the original signature.
-func (s *HTTPServer) RunOrDie(ctx context.Context) {
-	if err := s.Run(ctx); err != nil {
-		os.Exit(1)
-	}
-}
-
 // GracefulStop gracefully stops all servers.
-func (s *HTTPServer) GracefulStop(ctx context.Context) {
+func (s *HTTPServer) GracefulStop(ctx context.Context) error {
 	slog.Info("gracefully stopping HTTP(s) servers")
 
 	// Use errgroup for concurrent shutdown to improve efficiency.
@@ -120,7 +112,9 @@ func (s *HTTPServer) GracefulStop(ctx context.Context) {
 	// Wait for all shutdowns to complete.
 	if err := eg.Wait(); err != nil {
 		slog.Error("one or more servers failed to shutdown gracefully", "error", err)
-	} else {
-		slog.Info("all servers stopped successfully")
+		return err
 	}
+
+	slog.Info("all servers stopped successfully")
+	return nil
 }

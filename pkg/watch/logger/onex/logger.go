@@ -1,7 +1,7 @@
 package onex
 
 import (
-	"github.com/onexstack/onexstack/pkg/log"
+	"log/slog"
 )
 
 // cronLogger implement the cron.Logger interface.
@@ -14,15 +14,18 @@ func NewLogger() *cronLogger {
 
 // Debug logs routine messages about cron's operation.
 func (l *cronLogger) Debug(msg string, kvs ...any) {
-	log.Debugw(msg, kvs...)
+	slog.Debug(msg, kvs...)
 }
 
 // Info logs routine messages about cron's operation.
 func (l *cronLogger) Info(msg string, kvs ...any) {
-	log.Infow(msg, kvs...)
+	slog.Info(msg, kvs...)
 }
 
 // Error logs an error condition.
 func (l *cronLogger) Error(err error, msg string, kvs ...any) {
-	log.Errorw(err, msg, kvs...)
+	args := make([]any, 0, len(kvs)+2)
+	args = append(args, kvs...)
+	args = append(args, "error", err)
+	slog.Error(msg, args...)
 }

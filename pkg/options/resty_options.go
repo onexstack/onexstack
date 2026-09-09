@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5" // 引入 JWT 库
@@ -58,6 +59,10 @@ type RestyOptions struct {
 	middlewares []resty.RequestMiddleware `json:"-" mapstructure:"-"`
 	// headers are default headers applied to the client.
 	headers map[string]string `json:"-" mapstructure:"-"`
+
+	// mu guards client; the client is lazily built once and reused across calls.
+	mu     sync.Mutex
+	client *resty.Client
 }
 
 // NewRestyOptions creates a RestyOptions with default parameters.
@@ -83,7 +88,7 @@ func (o *RestyOptions) Validate() []error {
 
 	// Endpoint must be non-empty and a valid URL with http/https scheme.
 	if o.Endpoint == "" {
-		errs = append(errs, fmt.Errorf("--"+o.fullPrefix+".endpoint is required"))
+		errs = append(errs, fmt.Errorf("--%s.endpoint is required", o.fullPrefix))
 	} else if u, err := url.ParseRequestURI(o.Endpoint); err != nil {
 		errs = append(errs, fmt.Errorf("invalid endpoint %q: %v", o.Endpoint, err))
 	} else if u.Scheme != "http" && u.Scheme != "https" {
@@ -100,11 +105,11 @@ func (o *RestyOptions) Validate() []error {
 
 	// Validate authentication configurations
 	if o.SecretID != "" && o.SecretKey == "" {
-		errs = append(errs, fmt.Errorf("both --"+o.fullPrefix+".secret-id and --"+o.fullPrefix+".secret-key must be provided together"))
+		errs = append(errs, fmt.Errorf("both --%s.secret-id and --%s.secret-key must be provided together", o.fullPrefix, o.fullPrefix))
 	}
 
 	if (o.Username != "" && o.Password == "") || (o.Username == "" && o.Password != "") {
-		errs = append(errs, fmt.Errorf("both --"+o.fullPrefix+".username and --"+o.fullPrefix+".password must be provided together"))
+		errs = append(errs, fmt.Errorf("both --%s.username and --%s.password must be provided together", o.fullPrefix, o.fullPrefix))
 	}
 
 	errs = append(errs, o.TLSOptions.Validate()...)
@@ -210,11 +215,12 @@ func (o *RestyOptions) generateJWT() (string, error) {
 	return token.SignedString([]byte(o.SecretKey))
 }
 
-// addAuthMiddleware handles the authentication logic with priority:
-// 1. Dynamic JWT (if SecretID & SecretKey are present)
-// 2. Static Token (if Token is present)
-func (o *RestyOptions) addAuthMiddleware() *RestyOptions {
-	mw := func(c *resty.Client, r *resty.Request) error {
+// authMiddleware returns a request middleware that injects authentication with
+// priority: dynamic JWT (SecretID+SecretKey) > static Token.
+// It is constructed fresh per client build rather than appended to o.middlewares,
+// so repeated client construction does not accumulate duplicate middlewares.
+func (o *RestyOptions) authMiddleware() resty.RequestMiddleware {
+	return func(c *resty.Client, r *resty.Request) error {
 		var finalToken string
 
 		// Priority 1: Generate JWT from Secret Credentials
@@ -242,9 +248,6 @@ func (o *RestyOptions) addAuthMiddleware() *RestyOptions {
 
 		return nil
 	}
-
-	o.middlewares = append(o.middlewares, mw)
-	return o
 }
 
 // applyToClient applies RestyOptions to the given resty.Client.
@@ -271,8 +274,8 @@ func (o *RestyOptions) applyToClient(client *resty.Client) {
 		client.SetBasicAuth(o.Username, o.Password)
 	}
 
-	// Apply combined authentication middleware (Secret JWT > Static Token)
-	o.addAuthMiddleware()
+	// Apply combined authentication middleware (Secret JWT > Static Token).
+	client.AddRequestMiddleware(o.authMiddleware())
 
 	// Apply other middlewares (before request hook).
 	for _, mw := range o.middlewares {
@@ -280,11 +283,19 @@ func (o *RestyOptions) applyToClient(client *resty.Client) {
 	}
 }
 
-// NewClient creates a new resty.Client configured from RestyOptions.
+// NewClient creates a resty.Client configured from RestyOptions.
+// The client is built once and cached: subsequent calls return the same instance,
+// avoiding repeated middleware registration and TLS resource loading. Mutating
+// options via With* methods after the first call does not affect the cached client.
 func (o *RestyOptions) NewClient() *resty.Client {
-	client := resty.New()
-	o.applyToClient(client)
-	return client
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	if o.client == nil {
+		o.client = resty.New()
+		o.applyToClient(o.client)
+	}
+	return o.client
 }
 
 // NewRequest creates a new resty.Request configured from RestyOptions.

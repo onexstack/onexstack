@@ -41,9 +41,9 @@ func OnInitialize(cfgFile *string, envPrefix string, searchPaths []string, confi
 		}
 
 		if path := viper.ConfigFileUsed(); path != "" {
-			slog.Info("Using config file", "path", path)
+			slog.Debug("Using config file", "path", path)
 		} else {
-			slog.Info("No config file used")
+			slog.Debug("No config file used")
 		}
 	}
 }

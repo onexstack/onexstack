@@ -8,64 +8,88 @@ package id
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/sony/sonyflake"
 )
 
+const (
+	// initialRetryInterval is the delay before the first retry when NextID fails.
+	initialRetryInterval = time.Millisecond
+	// maxRetryInterval caps the exponential backoff so the retry loop never
+	// overflows the interval and degrades into a busy loop.
+	maxRetryInterval = time.Second
+)
+
+// Sonyflake wraps a sonyflake generator to produce distributed unique IDs.
 type Sonyflake struct {
-	ops   SonyflakeOptions
-	sf    *sonyflake.Sonyflake
-	Error error
+	ops SonyflakeOptions
+	sf  *sonyflake.Sonyflake
 }
 
-// NewSonyflake can get a unique code by id(You need to ensure that id is unique).
-func NewSonyflake(options ...func(*SonyflakeOptions)) *Sonyflake {
+// NewSonyflake returns a new Sonyflake ID generator configured by the given
+// options, or an error if the generator cannot be created with those settings.
+func NewSonyflake(options ...func(*SonyflakeOptions)) (*Sonyflake, error) {
 	ops := getSonyflakeOptionsOrSetDefault(nil)
 	for _, f := range options {
 		f(ops)
 	}
-	sf := &Sonyflake{
-		ops: *ops,
-	}
+
 	st := sonyflake.Settings{
 		StartTime: ops.startTime,
 	}
-	if ops.machineId > 0 {
+	if ops.machineID > 0 {
 		st.MachineID = func() (uint16, error) {
-			return ops.machineId, nil
+			return ops.machineID, nil
 		}
 	}
+
 	ins := sonyflake.NewSonyflake(st)
 	if ins == nil {
-		sf.Error = fmt.Errorf("create snoyflake failed")
+		return nil, errors.New("failed to create sonyflake")
 	}
-	_, err := ins.NextID()
-	if err != nil {
-		sf.Error = fmt.Errorf("invalid start time")
+	if _, err := ins.NextID(); err != nil {
+		return nil, fmt.Errorf("invalid start time: %w", err)
 	}
-	sf.sf = ins
-	return sf
+
+	return &Sonyflake{
+		ops: *ops,
+		sf:  ins,
+	}, nil
 }
 
-func (s *Sonyflake) Id(ctx context.Context) (id uint64) {
-	if s.Error != nil {
-		return
-	}
-	var err error
-	id, err = s.sf.NextID()
+// ID returns a new unique uint64 ID, retrying with exponential backoff until
+// it succeeds or ctx is cancelled.
+func (s *Sonyflake) ID(ctx context.Context) (uint64, error) {
+	id, err := s.sf.NextID()
 	if err == nil {
-		return
+		return id, nil
 	}
 
-	sleep := 1
+	interval := initialRetryInterval
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+
 	for {
-		time.Sleep(time.Duration(sleep) * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-timer.C:
+		}
+
 		id, err = s.sf.NextID()
 		if err == nil {
-			return
+			return id, nil
 		}
-		sleep *= 2
+
+		if interval < maxRetryInterval {
+			interval *= 2
+			if interval > maxRetryInterval {
+				interval = maxRetryInterval
+			}
+		}
+		timer.Reset(interval)
 	}
 }

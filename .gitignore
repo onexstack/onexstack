@@ -342,6 +342,7 @@ flycheck_*.el
 
 # Misc
 .DS_Store
+.claude/
 *.env
 .env.*
 dist
@@ -353,6 +354,7 @@ dist
 #.note.md
 
 # config files, may contain sensitive information
+1.yaml
 
 # Start by zero project
 apiserver.local.config

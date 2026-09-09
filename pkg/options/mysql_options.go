@@ -56,26 +56,26 @@ func (o *MySQLOptions) Validate() []error {
 
 // AddFlags adds flags related to mysql storage for a specific APIServer to the specified FlagSet.
 func (o *MySQLOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
-	fs.StringVar(&o.Addr, fullPrefix+".host", o.Addr, ""+
-		"MySQL service host address.")
+	fs.StringVar(&o.Addr, fullPrefix+".addr", o.Addr, ""+
+		"MySQL service address. If left blank, the following related mysql options will be ignored.")
 	fs.StringVar(&o.Username, fullPrefix+".username", o.Username, "Username for access to mysql service.")
 	fs.StringVar(&o.Password, fullPrefix+".password", o.Password, ""+
 		"Password for access to mysql, should be used pair with password.")
 	fs.StringVar(&o.Database, fullPrefix+".database", o.Database, ""+
 		"Database name for the server to use.")
-	fs.IntVar(&o.MaxIdleConnections, fullPrefix+".max-idle-connections", o.MaxOpenConnections, ""+
+	fs.IntVar(&o.MaxIdleConnections, fullPrefix+".max-idle-connections", o.MaxIdleConnections, ""+
 		"Maximum idle connections allowed to connect to .")
 	fs.IntVar(&o.MaxOpenConnections, fullPrefix+".max-open-connections", o.MaxOpenConnections, ""+
 		"Maximum open connections allowed to connect to .")
 	fs.DurationVar(&o.MaxConnectionLifeTime, fullPrefix+".max-connection-life-time", o.MaxConnectionLifeTime, ""+
 		"Maximum connection life time allowed to connect to .")
-	fs.IntVar(&o.LogLevel, fullPrefix+".log-mode", o.LogLevel, ""+
+	fs.IntVar(&o.LogLevel, fullPrefix+".log-level", o.LogLevel, ""+
 		"Specify gorm log level.")
 }
 
 // DSN return DSN from MySQLOptions.
 func (o *MySQLOptions) DSN() string {
-	return fmt.Sprintf(`%s:%s@tcp(%s)/%s?charset=utf8&parseTime=%t&loc=%s`,
+	return fmt.Sprintf(`%s:%s@tcp(%s)/%s?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=%t&loc=%s`,
 		o.Username,
 		o.Password,
 		o.Addr,

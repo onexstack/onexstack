@@ -655,7 +655,7 @@ func exampleConcurrentPerformanceComparison() {
 	if fluxConcurrentDuration < otterConcurrentDuration {
 		improvement := float64(otterConcurrentDuration-fluxConcurrentDuration) /
 			float64(otterConcurrentDuration) * 100
-		fmt.Printf("��� Flux i2f%% faster in concurrent scenarios\n", improvement)
+		fmt.Printf("Flux is %.2f%% faster in concurrent scenarios\n", improvement)
 	} else {
 		degradation := float64(fluxConcurrentDuration-otterConcurrentDuration) /
 			float64(fluxConcurrentDuration) * 100

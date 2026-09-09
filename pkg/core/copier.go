@@ -37,8 +37,11 @@ func TypeConverters() []copier.TypeConverter {
 }
 
 func CopyWithConverters(to any, from any, converters ...copier.TypeConverter) error {
-	converters = append(TypeConverters(), converters...)
-	return copier.CopyWithOption(to, from, copier.Option{IgnoreEmpty: true, DeepCopy: true, Converters: converters})
+	// 用户传入的转换器优先，内置 time.Time↔Timestamp 作为兜底，允许用户覆盖。
+	all := make([]copier.TypeConverter, 0, len(converters)+2)
+	all = append(all, converters...)
+	all = append(all, TypeConverters()...)
+	return copier.CopyWithOption(to, from, copier.Option{IgnoreEmpty: true, DeepCopy: true, Converters: all})
 }
 
 func Copy(to any, from any) error {

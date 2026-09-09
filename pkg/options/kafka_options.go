@@ -22,9 +22,9 @@ type franzLogger struct{}
 
 // Level implements kgo.Logger.
 func (l franzLogger) Level() kgo.LogLevel {
-	// 这里可以根据 klog 的全局设置动态返回，或者默认返回 Info
-	// franz-go 会调用这个方法来决定是否调用 Log
-	return kgo.LogLevelDebug
+	// 默认返回 Info 级别，避免 franz-go 对每条 debug 日志都回调 Log 造成无谓开销。
+	// franz-go 会调用这个方法来决定是否调用 Log。
+	return kgo.LogLevelInfo
 }
 
 // Log implements kgo.Logger.
@@ -185,7 +185,7 @@ func (o *KafkaOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
 	fs.StringVar(&o.Algorithm, fullPrefix+".algorithm", o.Algorithm, "Algorithm used to create sasl.Mechanism (scram-sha-256 or scram-sha-512).")
 	fs.BoolVar(&o.Compressed, fullPrefix+".compressed", o.Compressed, "compressed is used to specify whether compress Kafka messages (Snappy).")
 
-	fs.IntVar(&o.WriterOptions.RequiredAcks, fullPrefix+".required-acks", o.WriterOptions.RequiredAcks, "Number of acknowledges required: -1=All, 1=Leader, 0=None.")
+	fs.IntVar(&o.WriterOptions.RequiredAcks, fullPrefix+".writer.required-acks", o.WriterOptions.RequiredAcks, "Number of acknowledges required: -1=All, 1=Leader, 0=None.")
 	fs.IntVar(&o.WriterOptions.MaxAttempts, fullPrefix+".writer.max-attempts", o.WriterOptions.MaxAttempts, "Limit on how many attempts will be made to deliver a message.")
 	fs.BoolVar(&o.WriterOptions.Async, fullPrefix+".writer.async", o.WriterOptions.Async, "Whether to produce messages asynchronously.")
 	fs.DurationVar(&o.WriterOptions.BatchTimeout, fullPrefix+".writer.batch-timeout", o.WriterOptions.BatchTimeout, "Time limit on how often incomplete message batches will be flushed to kafka.")

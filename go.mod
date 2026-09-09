@@ -4,13 +4,13 @@ go 1.24.0
 
 require (
 	github.com/BurntSushi/toml v1.4.0
+	github.com/MakeNowJust/heredoc v1.0.0
+	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/casbin/casbin/v2 v2.103.0
 	github.com/casbin/gorm-adapter/v3 v3.32.0
 	github.com/dgraph-io/ristretto/v2 v2.3.0
-	github.com/fatih/color v1.18.0
-	github.com/fsnotify/fsnotify v1.8.0
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-kratos/kratos/contrib/registry/consul/v2 v2.0.0-20241219093211-5087366d2f90
 	github.com/go-kratos/kratos/contrib/registry/etcd/v2 v2.0.0-20241219093211-5087366d2f90
@@ -32,6 +32,7 @@ require (
 	github.com/kisielk/errcheck v1.8.0
 	github.com/larksuite/oapi-sdk-go/v3 v3.9.4
 	github.com/maypok86/otter/v2 v2.2.1
+	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/nicksnyder/go-i18n/v2 v2.4.1
 	github.com/polarismesh/grpc-go-polaris v1.5.0
 	github.com/polarismesh/polaris-go v1.6.1
@@ -39,6 +40,7 @@ require (
 	github.com/redis/go-redis/extra/rediscensus/v9 v9.7.0
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/russross/blackfriday/v2 v2.1.0
 	github.com/sony/sonyflake v1.2.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
@@ -63,7 +65,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0
 	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/ratelimit v0.3.1
-	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.45.0
 	golang.org/x/sync v0.18.0
 	golang.org/x/text v0.31.0
@@ -77,7 +78,6 @@ require (
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.0
 	k8s.io/apimachinery v0.32.1
-	k8s.io/client-go v0.32.1
 	k8s.io/component-base v0.32.1
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
@@ -86,7 +86,6 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -106,6 +105,8 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dlclark/regexp2 v1.11.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/fatih/color v1.18.0 // indirect
+	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.10 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
@@ -157,7 +158,6 @@ require (
 	github.com/microsoft/go-mssqldb v1.6.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/moby/term v0.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/montanaflynn/stats v0.7.1 // indirect
@@ -192,6 +192,7 @@ require (
 	github.com/xdg-go/scram v1.1.2 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.etcd.io/etcd/api/v3 v3.6.4 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.6.4 // indirect
 	go.opencensus.io v0.24.0 // indirect
@@ -201,6 +202,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.7.1 // indirect
 	go.uber.org/mock v0.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
 	golang.org/x/mod v0.29.0 // indirect

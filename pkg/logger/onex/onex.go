@@ -2,8 +2,8 @@ package onex
 
 import (
 	"context"
+	"log/slog"
 
-	"github.com/onexstack/onexstack/pkg/log"
 	"github.com/onexstack/onexstack/pkg/logger"
 )
 
@@ -23,42 +23,42 @@ func NewLogger() *onexLogger {
 
 // Debug logs a debug message with any additional key-value pairs.
 func (l *onexLogger) Debug(msg string, kvs ...any) {
-	log.Debugw(msg, l.mergeKVs(kvs)...)
+	slog.Debug(msg, l.mergeKVs(kvs)...)
 }
 
 // Warn logs a warning message with any additional key-value pairs.
 func (l *onexLogger) Warn(msg string, kvs ...any) {
-	log.Warnw(msg, l.mergeKVs(kvs)...)
+	slog.Warn(msg, l.mergeKVs(kvs)...)
 }
 
 // Info logs an informational message with any additional key-value pairs.
 func (l *onexLogger) Info(msg string, kvs ...any) {
-	log.Infow(msg, l.mergeKVs(kvs)...)
+	slog.Info(msg, l.mergeKVs(kvs)...)
 }
 
 // Error logs an error message with any additional key-value pairs.
 func (l *onexLogger) Error(msg string, kvs ...any) {
-	log.Errorw(nil, msg, l.mergeKVs(kvs)...)
+	slog.Error(msg, l.mergeKVs(kvs)...)
 }
 
 // DebugContext logs a debug message with context and optional key-value pairs.
 func (l *onexLogger) DebugContext(ctx context.Context, msg string, kvs ...any) {
-	log.W(ctx).Debugw(msg, l.mergeKVs(kvs)...)
+	slog.DebugContext(ctx, msg, l.mergeKVs(kvs)...)
 }
 
 // WarnContext logs a warning message with context and optional key-value pairs.
 func (l *onexLogger) WarnContext(ctx context.Context, msg string, kvs ...any) {
-	log.W(ctx).Warnw(msg, l.mergeKVs(kvs)...)
+	slog.WarnContext(ctx, msg, l.mergeKVs(kvs)...)
 }
 
 // InfoContext logs an informational message with context and optional key-value pairs.
 func (l *onexLogger) InfoContext(ctx context.Context, msg string, kvs ...any) {
-	log.W(ctx).Infow(msg, l.mergeKVs(kvs)...)
+	slog.InfoContext(ctx, msg, l.mergeKVs(kvs)...)
 }
 
 // ErrorContext logs an error message with context and optional key-value pairs.
 func (l *onexLogger) ErrorContext(ctx context.Context, msg string, kvs ...any) {
-	log.W(ctx).Errorw(nil, msg, l.mergeKVs(kvs)...)
+	slog.ErrorContext(ctx, msg, l.mergeKVs(kvs)...)
 }
 
 // With returns a NEW Logger instance with the provided key-value pairs pre-assigned.

@@ -15,7 +15,7 @@ import (
 	polarisgrpc "github.com/polarismesh/grpc-go-polaris"
 	"github.com/polarismesh/polaris-go"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/reflection"
 
 	genericoptions "github.com/onexstack/onexstack/pkg/options"
@@ -23,8 +23,9 @@ import (
 
 // PolarisServer 代表一个 GRPC 服务器.
 type PolarisServer struct {
-	srv *polarisgrpc.Server
-	lis net.Listener
+	srv          *polarisgrpc.Server
+	lis          net.Listener
+	healthServer *health.Server
 }
 
 // NewPolarisServer 创建一个新的 GRPC 服务器实例.
@@ -41,10 +42,7 @@ func NewPolarisServer(
 		return nil, err
 	}
 
-	if tlsOptions != nil && tlsOptions.Enabled {
-		tlsConfig := tlsOptions.MustTLSConfig()
-		serverOptions = append(serverOptions, grpc.Creds(credentials.NewTLS(tlsConfig)))
-	}
+	serverOptions = appendTLSCreds(serverOptions, tlsOptions)
 
 	registerFn, _ := registerBuilder()
 
@@ -71,23 +69,32 @@ func NewPolarisServer(
 	}
 
 	registerFn(srv.Server)
-	registerHealthServer(polarisOptions.Provider.Service, srv.Server)
+	healthServer := registerHealthServer(polarisOptions.Provider.Service, srv.Server)
 	reflection.Register(srv.Server)
 
-	return &PolarisServer{srv: srv, lis: lis}, nil
+	return &PolarisServer{srv: srv, lis: lis, healthServer: healthServer}, nil
 }
 
-// RunOrDie 启动 GRPC 服务器并在出错时记录致命错误.
-func (s *PolarisServer) RunOrDie() {
+// Run 启动 GRPC 服务器并阻塞直到服务器停止或出错.
+func (s *PolarisServer) Run(ctx context.Context) error {
 	slog.Info("start to listening the incoming requests", "protocol", "grpc", "addr", s.lis.Addr().String())
 	if err := s.srv.Serve(s.lis); err != nil {
 		slog.Error("failed to serve grpc server", "error", err)
+		return err
 	}
+	return nil
 }
 
 // GracefulStop 优雅地关闭 GRPC 服务器.
-func (s *PolarisServer) GracefulStop(ctx context.Context) {
+func (s *PolarisServer) GracefulStop(ctx context.Context) error {
 	slog.Info("gracefully stop grpc server")
+
+	// 先将服务置为 NOT_SERVING，使负载均衡/探活停止转发新流量.
+	if s.healthServer != nil {
+		s.healthServer.Shutdown()
+	}
+
 	s.srv.Deregister()
 	s.srv.GracefulStop()
+	return nil
 }

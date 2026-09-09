@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
 	"github.com/onexstack/onexstack/pkg/db"
 	gormlogger "github.com/onexstack/onexstack/pkg/logger/slog/gorm"
@@ -61,13 +62,13 @@ func (o *PostgreSQLOptions) AddFlags(fs *pflag.FlagSet, fullPrefix string) {
 		"Password for access to postgresql, should be used pair with password.")
 	fs.StringVar(&o.Database, fullPrefix+".database", o.Database, ""+
 		"Database name for the server to use.")
-	fs.IntVar(&o.MaxIdleConnections, fullPrefix+".max-idle-connections", o.MaxOpenConnections, ""+
+	fs.IntVar(&o.MaxIdleConnections, fullPrefix+".max-idle-connections", o.MaxIdleConnections, ""+
 		"Maximum idle connections allowed to connect to postgresql.")
 	fs.IntVar(&o.MaxOpenConnections, fullPrefix+".max-open-connections", o.MaxOpenConnections, ""+
 		"Maximum open connections allowed to connect to postgresql.")
 	fs.DurationVar(&o.MaxConnectionLifeTime, fullPrefix+".max-connection-life-time", o.MaxConnectionLifeTime, ""+
 		"Maximum connection life time allowed to connect to postgresql.")
-	fs.IntVar(&o.LogLevel, fullPrefix+".log-mode", o.LogLevel, ""+
+	fs.IntVar(&o.LogLevel, fullPrefix+".log-level", o.LogLevel, ""+
 		"Specify gorm log level.")
 }
 
@@ -81,7 +82,7 @@ func (o *PostgreSQLOptions) NewDB() (*gorm.DB, error) {
 		MaxIdleConnections:    o.MaxIdleConnections,
 		MaxOpenConnections:    o.MaxOpenConnections,
 		MaxConnectionLifeTime: o.MaxConnectionLifeTime,
-		Logger:                gormlogger.New(slog.Default()),
+		Logger:                gormlogger.New(slog.Default(), gormlogger.WithLogLevel(logger.LogLevel(o.LogLevel))),
 	}
 
 	return db.NewPostgreSQL(opts)

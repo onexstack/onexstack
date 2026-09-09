@@ -31,7 +31,7 @@ type ErrorResponse struct {
 }
 
 // HandleAllRequest 是处理综合请求的快捷函数。
-// 它会将 URI 参数、Query/Form 参数、以及 JSON Body 一并绑定到结构体中，
+// 它会将 URI 参数以及 JSON Body 一并绑定到结构体中，
 // 然后可选执行多个验证器，最后调用业务逻辑处理函数。
 func HandleAllRequest[T any, R any](c *gin.Context, handler Handler[T, R], validators ...Validator[T]) {
 	var request T
@@ -93,11 +93,12 @@ func ShouldBindUri[T any](c *gin.Context, rq *T, validators ...Validator[T]) err
 	return ReadRequest(c, rq, c.ShouldBindUri, validators...)
 }
 
-// ShouldBindAll 将 URI 参数、Query/Form 参数以及 JSON Body 一并绑定到结构体中。
+// ShouldBindAll 将 URI 参数以及 JSON Body 一并绑定到结构体中。
 // 它能覆盖同名字段（后者优先），并支持 Default() 与验证函数 validators。
+// 注意：当前仅绑定 URI 与 JSON 两种来源（pkg/binding 尚无 Query/Form 绑定器）。
 func ShouldBindAll[T any](c *gin.Context, rq *T, validators ...Validator[T]) error {
 	if err := binding.Bind(c, rq, binding.URI, binding.JSON); err != nil {
-		return errorsx.ErrBind.WithMessage(err.Error())
+		return errorsx.ErrBind.WithMessage("%s", err.Error())
 	}
 
 	// 应用 Default() 并执行验证逻辑
@@ -115,7 +116,7 @@ func ShouldBindAll[T any](c *gin.Context, rq *T, validators ...Validator[T]) err
 func ReadRequest[T any](c *gin.Context, rq *T, binder Binder, validators ...Validator[T]) error {
 	// 调用绑定函数绑定请求数据
 	if err := binder(rq); err != nil {
-		return errorsx.ErrBind.WithMessage(err.Error())
+		return errorsx.ErrBind.WithMessage("%s", err.Error())
 	}
 
 	if err := FinalizeRequest(c, rq, validators...); err != nil {
