@@ -9,14 +9,22 @@ package server
 import (
 	"context"
 	"log/slog"
+	"net"
+	"strconv"
+	"time"
 
 	"github.com/go-kratos/kratos/contrib/registry/consul/v2"
 	"github.com/go-kratos/kratos/contrib/registry/etcd/v2"
+	"github.com/go-kratos/kratos/contrib/registry/eureka/v2"
+	"github.com/go-kratos/kratos/contrib/registry/nacos/v2"
 	"github.com/go-kratos/kratos/v2"
 	krtlog "github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/registry"
 	"github.com/go-kratos/kratos/v2/transport"
 	consulapi "github.com/hashicorp/consul/api"
+	"github.com/nacos-group/nacos-sdk-go/clients"
+	"github.com/nacos-group/nacos-sdk-go/common/constant"
+	"github.com/nacos-group/nacos-sdk-go/vo"
 	krtlogger "github.com/onexstack/onexstack/pkg/logger/klog/kratos"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
@@ -115,4 +123,56 @@ func NewConsulRegistrar(opts *genericoptions.ConsulOptions) registry.Registrar {
 	}
 	r := consul.New(cli, consul.WithHealthCheck(false))
 	return r
+}
+
+// NewEurekaRegistrar returns a kratos registry.Registrar backed by eureka.
+func NewEurekaRegistrar(opts *genericoptions.EurekaOptions) registry.Registrar {
+	if opts == nil {
+		panic("eureka registrar options must be set.")
+	}
+
+	r, err := eureka.New([]string{opts.Addr}, eureka.WithHeartbeat(opts.HeartbeatInterval))
+	if err != nil {
+		panic(err)
+	}
+	return r
+}
+
+// NewNacosRegistrar returns a kratos registry.Registrar backed by nacos.
+func NewNacosRegistrar(opts *genericoptions.NacosOptions) registry.Registrar {
+	if opts == nil {
+		panic("nacos registrar options must be set.")
+	}
+
+	serverConfigs := make([]constant.ServerConfig, 0, len(opts.Endpoints))
+	for _, endpoint := range opts.Endpoints {
+		host, portStr, err := net.SplitHostPort(endpoint)
+		if err != nil {
+			panic(err)
+		}
+		port, err := strconv.ParseUint(portStr, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		serverConfigs = append(serverConfigs, *constant.NewServerConfig(host, port))
+	}
+
+	clientConfig := constant.ClientConfig{
+		NamespaceId:         opts.Namespace,
+		TimeoutMs:           uint64(opts.Timeout / time.Millisecond),
+		NotLoadCacheAtStart: true,
+		LogDir:              "/tmp/nacos/log",
+		CacheDir:            "/tmp/nacos/cache",
+		LogLevel:            "warn",
+	}
+
+	client, err := clients.NewNamingClient(vo.NacosClientParam{
+		ClientConfig:  &clientConfig,
+		ServerConfigs: serverConfigs,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	return nacos.New(client, nacos.WithGroup(opts.Group), nacos.WithCluster(opts.Cluster))
 }
