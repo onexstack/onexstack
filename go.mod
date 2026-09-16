@@ -82,8 +82,8 @@ require (
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.0
-	k8s.io/apimachinery v0.32.1
-	k8s.io/component-base v0.32.1
+	k8s.io/apimachinery v0.37.0
+	k8s.io/component-base v0.37.0
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	resty.dev/v3 v3.0.0-beta.3
