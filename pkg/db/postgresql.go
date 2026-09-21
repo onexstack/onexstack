@@ -25,6 +25,14 @@ type PostgreSQLOptions struct {
 	MaxIdleConnections    int
 	MaxOpenConnections    int
 	MaxConnectionLifeTime time.Duration
+	// SSLMode is the libpq sslmode. Empty means "disable", which suits a local
+	// server. Managed instances normally require "require" or stricter.
+	SSLMode string
+	// SearchPath is the schema search path, e.g. "iam,public". When set, an
+	// unqualified table name resolves through it, which lets several services
+	// share a single database while owning one schema each. Keep "public" at the
+	// end so shared functions remain reachable. Empty keeps the server default.
+	SearchPath string
 	// +optional
 	Logger logger.Interface
 }
@@ -37,13 +45,37 @@ func (o *PostgreSQLOptions) DSN() string {
 		port = splited[1]
 	}
 
-	return fmt.Sprintf(`user=%s password=%s host=%s port=%s dbname=%s sslmode=disable TimeZone=Asia/Shanghai`,
-		o.Username,
-		o.Password,
+	sslmode := o.SSLMode
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+
+	dsn := fmt.Sprintf(`user=%s password=%s host=%s port=%s dbname=%s sslmode=%s TimeZone=Asia/Shanghai`,
+		quoteDSNValue(o.Username),
+		quoteDSNValue(o.Password),
 		host,
 		port,
-		o.Database,
+		quoteDSNValue(o.Database),
+		sslmode,
 	)
+
+	if o.SearchPath != "" {
+		dsn += " search_path=" + quoteDSNValue(o.SearchPath)
+	}
+
+	return dsn
+}
+
+// quoteDSNValue quotes a libpq keyword/value argument when it contains
+// characters that would otherwise terminate the value or start the next
+// argument. Without this a password containing a space silently truncates the
+// DSN and the connection fails with a confusing parse error.
+func quoteDSNValue(v string) string {
+	if v != "" && !strings.ContainsAny(v, ` '\`) {
+		return v
+	}
+
+	return `'` + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(v) + `'`
 }
 
 // NewPostgreSQL create a new gorm db instance with the given options.

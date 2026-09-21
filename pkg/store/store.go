@@ -49,8 +49,12 @@ func NewStore[T any](storage DBProvider, logger Logger) *Store[T] {
 }
 
 // db retrieves the database instance and applies the provided where conditions.
+//
+// The context is bound here rather than trusted to the provider: a DB that reads
+// the transaction out of ctx but does not call WithContext returns a handle that
+// carries the request's transaction but not its cancellation or deadline.
 func (s *Store[T]) db(ctx context.Context, wheres ...where.Where) *gorm.DB {
-	dbInstance := s.storage.DB(ctx)
+	dbInstance := s.storage.DB(ctx).WithContext(ctx)
 	for _, whr := range wheres {
 		if whr != nil {
 			dbInstance = whr.Where(dbInstance)

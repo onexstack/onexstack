@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
@@ -45,8 +46,24 @@ func NewPolarisLB(namespace, service, protocol string, addr string) (*PolarisLB,
 	}, nil
 }
 
-// Next 从 Polaris 选择一个实例，并返回 BaseURL
+// Next 从 Polaris 选择一个实例，并返回 BaseURL。
+//
+// resty v3 的 LoadBalancer 在 v3.0.0-rc.1 起把 Next() 换成了
+// NextWithContext(ctx)。两个方法都实现，这样无论上游锁定 beta.3 还是 rc.x
+// 都能满足接口——只需要其一即可编译。
 func (m *PolarisLB) Next() (string, error) {
+	return m.NextWithContext(context.Background())
+}
+
+// NextWithContext 从 Polaris 选择一个实例，并返回 BaseURL。
+//
+// ctx 只用于在发起调用前短路：polaris-go 的 GetOneInstance 当前不接受
+// context，所以已取消的 ctx 无法中断进行中的 RPC，只能避免明知无谓的调用。
+func (m *PolarisLB) NextWithContext(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
 	// 按需设置请求（可添加路由元数据、调用标签等）
 	req := &polaris.GetOneInstanceRequest{}
 	req.Service = m.service
