@@ -4,7 +4,7 @@
 // The original repo for this file is https:///sre-gitlab.bitget.tools/srestack/opsassist.
 // The professional version of this repository is https://github.com/onexstack/onex.
 
-// Package secretutil provides encryption/decryption and AKSK generation utilities.
+// Package secretutil provides encryption/decryption utilities.
 // Key is supplied via the functional options pattern:
 //
 //	// Explicit key
@@ -15,11 +15,11 @@
 //
 //	// Explicit key overrides env var
 //	secretutil.Encrypt("hello", secretutil.WithKey("my-key"))
+//
+// Credential generation lives in github.com/onexstack/onexstack/pkg/aksk.
 package secret
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"os"
 )
@@ -90,19 +90,4 @@ func Decrypt(cryptoText string, opts ...Option) (string, error) {
 	}
 
 	return decryptAES(key, cryptoText)
-}
-
-// GenerateAKSK generates a random AccessKey/SecretKey pair with standard prefixes.
-// - AK format: ak-<30-char-random> (Total: 33 chars)
-// - SK format: sk-<60-char-random> (Total: 63 chars)
-func GenerateAKSK() (ak, sk string) {
-    ak = "ak-" + generateRandomString(30)
-    sk = "sk-" + generateRandomString(60)
-    return ak, sk
-}
-
-func generateRandomString(n int) string {
-	b := make([]byte, n)
-	rand.Read(b)
-	return hex.EncodeToString(b)
 }

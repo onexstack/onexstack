@@ -2,7 +2,6 @@ package secret
 
 import (
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -182,37 +181,6 @@ func TestTruncateSecret(t *testing.T) {
 				t.Errorf("TruncateSecret(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestGenerateAKSK(t *testing.T) {
-	ak, sk := GenerateAKSK()
-
-	if !strings.HasPrefix(ak, "ak-") {
-		t.Errorf("AK should start with 'ak-', got %q", ak)
-	}
-	if !strings.HasPrefix(sk, "sk-") {
-		t.Errorf("SK should start with 'sk-', got %q", sk)
-	}
-
-	// AK: "ak-" (3) + 60 hex chars (30 bytes * 2) = 63 total
-	expectedAKLen := 3 + 30*2
-	if len(ak) != expectedAKLen {
-		t.Errorf("AK length: got %d, want %d (content: %q)", len(ak), expectedAKLen, ak)
-	}
-	// SK: "sk-" (3) + 120 hex chars (60 bytes * 2) = 123 total
-	expectedSKLen := 3 + 60*2
-	if len(sk) != expectedSKLen {
-		t.Errorf("SK length: got %d, want %d (content: %q)", len(sk), expectedSKLen, sk)
-	}
-
-	// Uniqueness: multiple calls should produce different values
-	ak2, sk2 := GenerateAKSK()
-	if ak == ak2 {
-		t.Error("two consecutive AK values should differ")
-	}
-	if sk == sk2 {
-		t.Error("two consecutive SK values should differ")
 	}
 }
 
