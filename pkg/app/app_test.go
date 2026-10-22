@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 
 	genericoptions "github.com/onexstack/onexstack/pkg/options"
 )
@@ -428,7 +429,17 @@ func TestShutdownersStopInLIFOOrder(t *testing.T) {
 	}
 }
 
-func TestReloadConfigUpdatesOptions(t *testing.T) {
+// TestReloadOffersAFreshConfigWithoutTouchingLiveOptions pins the contract a
+// reload is built on: it hands the callback a configuration derived from the
+// sources, and leaves the options the RunFunc is holding alone.
+//
+// Writing the new configuration back into the live options is the obvious
+// implementation and the one this replaced. It is a data race — the RunFunc's
+// goroutine reads those fields without a lock — and it cannot work for most
+// settings anyway, since connections are built once from values copied out of
+// the options at startup. So the test asserts the absence of that write, not
+// just the presence of the callback.
+func TestReloadOffersAFreshConfigWithoutTouchingLiveOptions(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(
 		filepath.Join(dir, "testconfig.yaml"),
@@ -439,11 +450,16 @@ func TestReloadConfigUpdatesOptions(t *testing.T) {
 	}
 
 	opts := &testOptions{}
+	var got *viper.Viper
 	app := NewApp("test", "test",
 		WithSilence(),
 		WithOptions(opts),
 		WithConfigSearchPaths([]string{dir}),
 		WithConfigName("testconfig"),
+		WithConfigChange(func(v *viper.Viper) error {
+			got = v
+			return nil
+		}),
 		WithRun(func(ctx context.Context) error { return nil }),
 	)
 
@@ -458,15 +474,40 @@ func TestReloadConfigUpdatesOptions(t *testing.T) {
 		t.Fatalf("initial load: level=%q port=%d, want debug/9090", opts.Level, opts.Port)
 	}
 
-	// Simulate a config change by mutating the in-memory viper values, then
-	// reload. This mirrors what viper's WatchConfig triggers on a file change.
-	app.v.Set("level", "error")
-	app.v.Set("port", 8080)
-
-	if err := app.reloadConfig(); err != nil {
+	// The file changes, and a remote tree arrives with a value that beats the
+	// file but not the environment.
+	if err := os.WriteFile(
+		filepath.Join(dir, "testconfig.yaml"),
+		[]byte("level: warn\nport: 9090\n"),
+		0o600,
+	); err != nil {
 		t.Fatal(err)
 	}
-	if opts.Level != "error" || opts.Port != 8080 {
-		t.Fatalf("after reload: level=%q port=%d, want error/8080", opts.Level, opts.Port)
+
+	if err := app.reloadConfig(map[string]any{"level": "error"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got == nil {
+		t.Fatal("the change callback was not invoked")
+	}
+	if v := got.GetString("level"); v != "error" {
+		t.Fatalf("reloaded level = %q, want error (remote beats the file)", v)
+	}
+	if v := got.GetInt("port"); v != 9090 {
+		t.Fatalf("reloaded port = %d, want 9090 (from the file)", v)
+	}
+
+	// The live options are untouched, because nothing owns the right to write
+	// them while the RunFunc may be reading them.
+	if opts.Level != "debug" || opts.Port != 9090 {
+		t.Fatalf("live options were mutated by the reload: level=%q port=%d, want debug/9090",
+			opts.Level, opts.Port)
+	}
+
+	// Read the file valueless: the reload must not be observing the app's live
+	// viper instance either.
+	if got == app.v {
+		t.Fatal("the callback received the app's live viper instance instead of a fresh one")
 	}
 }

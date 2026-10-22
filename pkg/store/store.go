@@ -102,10 +102,47 @@ func (s *Store[T]) Get(ctx context.Context, opts *where.Options) (*T, error) {
 }
 
 // List retrieves a list of objects from the database based on the provided where options.
+//
+// It returns the page and the total it is drawn from, which is two statements:
+// a COUNT over the whole filtered set and a paged SELECT over it. The count
+// comes first, so a filter that matches nothing costs one statement instead of
+// two — an empty page is not rare (a user with no orders, a tag with no posts),
+// and the SELECT it skips is the one that has to build and sort a result set.
+//
+// # The two statements are forked, not chained
+//
+// Session(&gorm.Session{}) gives each statement its own copy of the built query.
+// Chaining them — Find followed by Offset(-1).Limit(-1).Count — happens to work
+// because Count rebuilds its own SQL, but it leaves the two statements sharing
+// one *gorm.Statement, and the paging reset is a side effect either of them
+// could observe. The fork states the intent: the count is over the whole set
+// (offset -1 and limit -1 are GORM's "no limit"), the page is over its own
+// slice of it.
+//
+// opts must not be reused across calls: Options.Where appends to the receiver's
+// own clause slice, so a second call re-applies every condition.
 func (s *Store[T]) List(ctx context.Context, opts *where.Options) (count int64, ret []*T, err error) {
-	err = s.db(ctx, opts).Order("id desc").Find(&ret).Offset(-1).Limit(-1).Count(&count).Error
-	if err != nil {
-		s.logger.Error(ctx, err, "Failed to list objects from database")
+	if opts == nil {
+		opts = where.NewWhere()
 	}
-	return
+	// Model is set from T rather than left to be inferred from a destination:
+	// the count runs first and carries no destination of its own, so without it
+	// GORM has no table to count — "Table not set, please set it like:
+	// db.Model(&user)". Find would have inferred it, but it is the statement that
+	// runs second.
+	query := opts.Where(s.db(ctx).Model(new(T)))
+
+	if err = query.Session(&gorm.Session{}).Offset(-1).Limit(-1).Count(&count).Error; err != nil {
+		s.logger.Error(ctx, err, "Failed to list objects from database")
+		return 0, nil, err
+	}
+	if count == 0 {
+		return 0, nil, nil
+	}
+
+	if err = query.Order("id desc").Find(&ret).Error; err != nil {
+		s.logger.Error(ctx, err, "Failed to list objects from database")
+		return 0, nil, err
+	}
+	return count, ret, nil
 }

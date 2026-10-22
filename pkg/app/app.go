@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -87,6 +88,15 @@ type App struct {
 	// gracefully stopped after the PreShutdown hook.
 	shutdowners []Shutdowner
 
+	// +optional - a remote configuration source (a config center), and the
+	// callbacks to run when it reports a change. See configsource.go.
+	remoteConfig      RemoteConfigSource
+	configChangeHooks []ConfigChangeFunc
+
+	// reloadMu serializes config reloads: a change arriving while one is being
+	// applied waits rather than interleaving with it.
+	reloadMu sync.Mutex
+
 	// ran guards the single-run invariant. It is an atomic flag set exactly
 	// once; a subsequent RunContext call fails fast without blocking.
 	ran atomic.Bool
@@ -106,10 +116,14 @@ type HealthCheckFunc func() error
 // For PostRun hooks, ctx is a timeout context (see WithShutdownTimeout).
 type LifecycleHook func(ctx context.Context) error
 
-// ConfigChangeFunc is invoked after a watched config file changes and the new
-// config has been successfully re-unmarshaled and re-validated. Implementations
-// must be safe for concurrent use and must not block the viper watch goroutine.
-type ConfigChangeFunc func()
+// ConfigChangeFunc is invoked after the remote configuration source reports a
+// change, with a freshly built viper instance holding the new configuration.
+//
+// The instance belongs to this callback alone: it is built for the change and
+// discarded afterwards, so it must not be retained, and it is not the app's live
+// instance (see WithConfigChange). Implementations run on their own goroutine
+// and must not block.
+type ConfigChangeFunc func(v *viper.Viper) error
 
 // Option defines optional parameters for initializing the application.
 type Option func(*App)
@@ -458,6 +472,14 @@ func (a *App) setupCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Fold in a remote configuration source, if one is wired. This has to happen
+	// after the flags are bound — so the source's own settings are resolved at
+	// their final precedence — and before the options are applied, so that what
+	// the source returns is part of what they are applied from.
+	if err := a.loadRemoteConfig(cmd.Context()); err != nil {
+		return err
+	}
+
 	if err := a.applyOptions(); err != nil {
 		return err
 	}
@@ -513,6 +535,12 @@ func (a *App) runCommand(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("pre-run hook failed: %w", err)
 		}
 	}
+
+	// Start watching the remote config source, if there is one. It runs here
+	// rather than in setupCommand so that it receives the signal-aware ctx: the
+	// watch must stop when the process is asked to, or goroutines outlive the
+	// servers they were configured for.
+	a.startRemoteConfigWatch(ctx)
 
 	// Execute the user's RunFunc. This typically blocks until the
 	// context is canceled (shutdown) or a fatal error occurs.
@@ -604,9 +632,23 @@ func (a *App) registerShutdowner(s Shutdowner) {
 }
 
 // applyOptions unmarshals the loaded configuration into the app options and
-// runs the optional Complete and Validate hooks. It is shared by the initial
-// setup (setupCommand) and by config hot-reload (reloadConfig).
+// runs the optional Complete and Validate hooks.
 func (a *App) applyOptions() error {
+	if err := a.unmarshalOptions(); err != nil {
+		return err
+	}
+	return a.validateOptions()
+}
+
+// unmarshalOptions resolves the configuration into the app options and runs the
+// Complete hook, which puts each backend's settings in its final form.
+//
+// It is separate from applyOptions because loading a remote configuration needs
+// the options resolved before it can ask the source for anything, but must not
+// validate them yet: a required setting that only the remote configuration
+// supplies would be rejected before it had been read. So setupCommand calls
+// this, then loads and merges the remote tree, then calls the full applyOptions.
+func (a *App) unmarshalOptions() error {
 	if a.options == nil {
 		return nil
 	}
@@ -622,6 +664,15 @@ func (a *App) applyOptions() error {
 		}
 	}
 
+	return nil
+}
+
+// validateOptions runs the optional Validate hook.
+func (a *App) validateOptions() error {
+	if a.options == nil {
+		return nil
+	}
+
 	// Validate: error-style.
 	if v, ok := a.options.(OptionsValidator); ok {
 		if err := v.Validate(); err != nil {
@@ -632,14 +683,7 @@ func (a *App) applyOptions() error {
 	return nil
 }
 
-// reloadConfig re-applies the current viper configuration to the app options
-// after a watched config file changes, mirroring the startup sequence in
-// setupCommand. It runs on the viper watch goroutine; a concurrent RunFunc
-// reading the options must synchronize with this write via the caller's own
-// locking, as viper's hot-reload path is not internally synchronized.
-func (a *App) reloadConfig() error {
-	return a.applyOptions()
-}
+// reloadConfig lives in configsource.go, next to the watch that drives it.
 
 // effectiveConfigName returns the config file name to use.
 func (a *App) effectiveConfigName() string {

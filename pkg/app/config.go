@@ -34,26 +34,8 @@ func (a *App) loadConfig() error {
 		return nil
 	}
 
-	if a.cfgFile != "" {
-		a.v.SetConfigFile(a.cfgFile)
-	} else {
-		for _, p := range a.effectiveConfigSearchPaths() {
-			a.v.AddConfigPath(p)
-		}
-		a.v.SetConfigType("yaml")
-		a.v.SetConfigName(a.effectiveConfigName())
-	}
-
-	a.v.AutomaticEnv()
-	a.v.SetEnvPrefix(a.envPrefix)
-	a.v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
-
-	if err := a.v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			slog.Info("config file not found, using defaults and env vars", "searchPaths", a.effectiveConfigSearchPaths())
-		} else {
-			return fmt.Errorf("failed to parse config file: %w", err)
-		}
+	if err := a.loadConfigInto(a.v); err != nil {
+		return err
 	}
 
 	slog.Info("using config file", "path", a.v.ConfigFileUsed())
@@ -61,10 +43,49 @@ func (a *App) loadConfig() error {
 	return nil
 }
 
-// printConfig logs all viper configuration keys at debug level. It is a no-op
-// (and cheap) when debug logging is disabled.
+// loadConfigInto applies the app's file, environment and search-path settings to
+// the given viper instance.
+//
+// It is parameterized rather than reading a.v directly so that a config reload
+// can build a fresh instance with the same sources instead of re-reading into
+// the live one, which is neither concurrency-safe nor able to drop a key the new
+// configuration no longer defines.
+func (a *App) loadConfigInto(v *viper.Viper) error {
+	if a.cfgFile != "" {
+		v.SetConfigFile(a.cfgFile)
+	} else {
+		for _, p := range a.effectiveConfigSearchPaths() {
+			v.AddConfigPath(p)
+		}
+		v.SetConfigType("yaml")
+		v.SetConfigName(a.effectiveConfigName())
+	}
+
+	v.AutomaticEnv()
+	v.SetEnvPrefix(a.envPrefix)
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+
+	if err := v.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			slog.Info("config file not found, using defaults and env vars", "searchPaths", a.effectiveConfigSearchPaths())
+		} else {
+			return fmt.Errorf("failed to parse config file: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// printConfig logs the resolved configuration at debug level. It is a no-op (and
+// cheap) when debug logging is disabled or config loading is off.
+//
+// Values whose key names a credential are replaced rather than printed. This
+// dump exists to answer "what did the service actually read, and from where" —
+// a question about the shape of the configuration, not about the password in it
+// — and debug logging is usually turned on in a shared environment, where the
+// resulting line would outlive the incident that motivated it.
 func (a *App) printConfig() {
-	if !a.noConfig {
+	if a.noConfig {
 		return
 	}
 
@@ -75,7 +96,37 @@ func (a *App) printConfig() {
 	keys := a.v.AllKeys()
 	attrs := make([]any, 0, len(keys)*2)
 	for _, key := range keys {
-		attrs = append(attrs, key, a.v.Get(key))
+		value := any(a.v.Get(key))
+		if namesACredential(key) {
+			value = "<redacted>"
+		}
+		attrs = append(attrs, key, value)
 	}
 	slog.Debug("configuration", attrs...)
+}
+
+// credentialKeyParts are the substrings that mark a configuration key as
+// carrying a credential. They are deliberately broad: redacting a public key or
+// a key name costs a line of debugging, while printing a private one cannot be
+// taken back.
+var credentialKeyParts = []string{
+	"password", "secret", "token", "credential", "api-key", "apikey", "private-key",
+	"dsn", "salt", "auth-key",
+}
+
+// namesACredential reports whether a configuration key is likely to hold a
+// credential. Both the plain and the hyphen/underscore forms are matched, since
+// a key arrives spelled the way its source spelled it.
+func namesACredential(key string) bool {
+	normalized := strings.ToLower(key)
+	normalized = strings.NewReplacer("_", "-", ".", "-").Replace(normalized)
+
+	for _, part := range credentialKeyParts {
+		if strings.Contains(normalized, part) {
+			return true
+		}
+	}
+	// A bare "key" or a "…-key" suffix is a credential in this platform: auth.key
+	// signs tokens and capability-key signs knowledge-base entries.
+	return normalized == "key" || strings.HasSuffix(normalized, "-key")
 }
