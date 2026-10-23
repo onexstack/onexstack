@@ -96,11 +96,11 @@ func (r *recorder) Results() []map[string]any {
 		if st := r.SeverityText(); st != "" {
 			m["severityText"] = st
 		}
-		if body := r.Body(); body.Kind() != log.KindEmpty {
+		if body := r.Body(); body.Type() != attribute.EMPTY {
 			m[slog.MessageKey] = value2Result(body)
 		}
-		r.WalkAttributes(func(kv log.KeyValue) bool {
-			m[kv.Key] = value2Result(kv.Value)
+		r.WalkAttributes(func(kv attribute.KeyValue) bool {
+			m[string(kv.Key)] = value2Result(kv.Value)
 			return true
 		})
 
@@ -109,24 +109,24 @@ func (r *recorder) Results() []map[string]any {
 	return out
 }
 
-func value2Result(v log.Value) any {
-	switch v.Kind() {
-	case log.KindBool:
+func value2Result(v attribute.Value) any {
+	switch v.Type() {
+	case attribute.BOOL:
 		return v.AsBool()
-	case log.KindFloat64:
+	case attribute.FLOAT64:
 		return v.AsFloat64()
-	case log.KindInt64:
+	case attribute.INT64:
 		return v.AsInt64()
-	case log.KindString:
+	case attribute.STRING:
 		return v.AsString()
-	case log.KindBytes:
-		return v.AsBytes()
-	case log.KindSlice:
+	case attribute.BYTESLICE:
+		return v.AsByteSlice()
+	case attribute.SLICE:
 		return v
-	case log.KindMap:
+	case attribute.MAP:
 		m := make(map[string]any)
 		for _, val := range v.AsMap() {
-			m[val.Key] = value2Result(val.Value)
+			m[string(val.Key)] = value2Result(val.Value)
 		}
 		return m
 	}
@@ -266,7 +266,7 @@ func TestSLogHandler(t *testing.T) {
 				hasAttr("time", now.UnixNano()),
 				hasAttr("uint64", int64(3)),
 				hasAttr("nil", nil),
-				hasAttr("slice", log.SliceValue(log.StringValue("foo"), log.StringValue("bar"))),
+				hasAttr("slice", attribute.SliceValue(attribute.StringValue("foo"), attribute.StringValue("bar"))),
 			}},
 		},
 		{
