@@ -92,10 +92,17 @@ func (s *Store[T]) Delete(ctx context.Context, opts *where.Options) error {
 }
 
 // Get retrieves a single object from the database based on the provided where options.
+//
+// A missing row is an answer, not a failure: callers use Get to ask whether an
+// object exists, and a request-scoped logger would otherwise emit an error line
+// for every expected miss. The raw gorm.ErrRecordNotFound is still returned so
+// callers can distinguish it; only the logging is skipped.
 func (s *Store[T]) Get(ctx context.Context, opts *where.Options) (*T, error) {
 	var obj T
 	if err := s.db(ctx, opts).First(&obj).Error; err != nil {
-		s.logger.Error(ctx, err, "Failed to retrieve object from database")
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			s.logger.Error(ctx, err, "Failed to retrieve object from database")
+		}
 		return nil, err
 	}
 	return &obj, nil

@@ -33,4 +33,7 @@ var (
 
 	// ErrOperationFailed 表示操作失败.
 	ErrOperationFailed = &ErrorX{Code: http.StatusConflict, Reason: "OperationFailed", Message: "The requested operation has failed. Please try again later."}
+
+	// ErrTimeout 表示操作超时.
+	ErrTimeout = &ErrorX{Code: http.StatusGatewayTimeout, Reason: "DeadlineExceeded", Message: "The operation timed out."}
 )

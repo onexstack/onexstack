@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -98,6 +100,12 @@ func ShouldBindUri[T any](c *gin.Context, rq *T, validators ...Validator[T]) err
 // 注意：当前仅绑定 URI 与 JSON 两种来源（pkg/binding 尚无 Query/Form 绑定器）。
 func ShouldBindAll[T any](c *gin.Context, rq *T, validators ...Validator[T]) error {
 	if err := binding.Bind(c, rq, binding.URI, binding.JSON); err != nil {
+		var errx *errorsx.ErrorX
+		if errors.As(err, &errx) {
+			// A binder may classify its own failure (e.g. a programming error in
+			// a custom binder is not a caller bind error). Preserve that verdict.
+			return err
+		}
 		return errorsx.ErrBind.WithMessage("%s", err.Error())
 	}
 
@@ -116,6 +124,11 @@ func ShouldBindAll[T any](c *gin.Context, rq *T, validators ...Validator[T]) err
 func ReadRequest[T any](c *gin.Context, rq *T, binder Binder, validators ...Validator[T]) error {
 	// 调用绑定函数绑定请求数据
 	if err := binder(rq); err != nil {
+		var errx *errorsx.ErrorX
+		if errors.As(err, &errx) {
+			// Binder 已经给出语义化错误（如自定义 binder 的编程错误），保留它.
+			return err
+		}
 		return errorsx.ErrBind.WithMessage("%s", err.Error())
 	}
 
@@ -150,10 +163,24 @@ func FinalizeRequest[T any](c *gin.Context, rq *T, validators ...Validator[T]) e
 
 // WriteResponse 是通用的响应函数.
 // 它会根据是否发生错误，生成成功响应或标准化的错误响应.
+//
+// 错误出口是最后一道防线：非 *ErrorX 的错误先记录原始 cause（含请求上下文），
+// 再经 errorsx.Normalize 归一化为固定文案的 ErrorX，最后才序列化。
+// 这样响应体永远不会带出数据库语句、内部 URL 等细节，并且一定携带 Reason。
 func WriteResponse(c *gin.Context, data any, err error) {
 	if err != nil {
+		var errx *errorsx.ErrorX
+		if !errors.As(err, &errx) {
+			// 原始错误只进日志，不进响应体. Request 在测试里可能为空.
+			if c.Request != nil {
+				slog.ErrorContext(c.Request.Context(), "request failed", "error", err)
+			} else {
+				slog.Error("request failed", "error", err)
+			}
+		}
+
 		// 如果发生错误，生成错误响应
-		errx := errorsx.FromError(err) // 提取错误详细信息
+		errx = errorsx.FromError(errorsx.Normalize(err)) // 归一化并提取错误详细信息
 		c.JSON(errx.Code, ErrorResponse{
 			Reason:   errx.Reason,
 			Message:  errx.Message,

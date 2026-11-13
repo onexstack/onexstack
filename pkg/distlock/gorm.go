@@ -2,6 +2,7 @@ package distlock
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -66,6 +67,15 @@ func NewGORMLocker(db *gorm.DB, opts ...Option) (*GORMLocker, error) {
 }
 
 // Lock acquires the distributed lock.
+//
+// It takes over an expired lease with one atomic UPDATE before it tries to
+// INSERT. The obvious shape — INSERT, and on a duplicate take the row over — is
+// not usable on PostgreSQL: a unique violation aborts the surrounding
+// transaction, so the recovery statements fail with "current transaction is
+// aborted", and GORM also keeps the failed statement's error on the session.
+// Updating first is correct under a race too: the WHERE clause is re-evaluated
+// after the row lock is taken, so only one contender can see the lease as
+// expired.
 func (l *GORMLocker) Lock(ctx context.Context) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -73,41 +83,40 @@ func (l *GORMLocker) Lock(ctx context.Context) error {
 	now := time.Now()
 	expiredAt := now.Add(l.lockTimeout)
 
-	err := l.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&Lock{Name: l.lockName, OwnerID: l.ownerID, ExpiredAt: expiredAt}).Error; err != nil {
-			if !isDuplicateEntry(err) {
-				l.logger.Error("failed to create lock", "error", err)
-				return err
-			}
+	result := l.db.Model(&Lock{}).
+		Where("name = ? AND expired_at < ?", l.lockName, now).
+		Updates(map[string]any{
+			"owner_id":   l.ownerID,
+			"expired_at": expiredAt,
+			"updated_at": now,
+		})
+	if result.Error != nil {
+		l.logger.Error("failed to take over an expired lock", "error", result.Error)
+		return result.Error
+	}
+	if result.RowsAffected > 0 {
+		l.logger.Info("Lock expired, updated owner", "lockName", l.lockName, "newOwnerID", l.ownerID)
+	}
 
-			var lock Lock
-			if err := tx.First(&lock, "name = ?", l.lockName).Error; err != nil {
-				l.logger.Error("failed to fetch existing lock", "error", err)
-				return err
+	if result.RowsAffected == 0 {
+		// Either no row exists, or the row belongs to a live owner. A duplicate
+		// key means the latter (or a lease that expired between the two
+		// statements, which the caller's retry loop handles).
+		if err := l.db.Create(&Lock{Name: l.lockName, OwnerID: l.ownerID, ExpiredAt: expiredAt}).Error; err != nil {
+			if isDuplicateEntry(err) {
+				l.logger.Warn("lock is already held by another owner", "lockName", l.lockName)
+				return fmt.Errorf("%w: %s", ErrLockHeld, l.lockName)
 			}
-
-			if !lock.ExpiredAt.Before(now) {
-				l.logger.Warn("lock is already held by another owner", "ownerID", lock.OwnerID)
-				return fmt.Errorf("lock is already held by %s", lock.OwnerID)
-			}
-
-			lock.OwnerID = l.ownerID
-			lock.ExpiredAt = expiredAt
-			if err := tx.Save(&lock).Error; err != nil {
-				l.logger.Error("failed to update expired lock", "error", err)
-				return err
-			}
-			l.logger.Info("Lock expired, updated owner", "lockName", l.lockName, "newOwnerID", l.ownerID)
+			l.logger.Error("failed to create lock", "error", err)
+			return err
 		}
+	}
 
-		l.renewTicker = time.NewTicker(l.lockTimeout / 2)
-		go l.renewLock(ctx)
+	l.renewTicker = time.NewTicker(l.lockTimeout / 2)
+	go l.renewLock(ctx)
 
-		l.logger.Info("Lock acquired", "lockName", l.lockName, "ownerID", l.ownerID)
-		return nil
-	})
-
-	return err
+	l.logger.Info("Lock acquired", "lockName", l.lockName, "ownerID", l.ownerID)
+	return nil
 }
 
 // Unlock releases the distributed lock.
@@ -167,6 +176,16 @@ func (l *GORMLocker) renewLock(ctx context.Context) {
 func isDuplicateEntry(err error) bool {
 	if err == nil {
 		return false
+	}
+
+	// GORM's postgres and mysql drivers translate a unique-constraint violation
+	// into gorm.ErrDuplicatedKey before the caller sees it, so the
+	// driver-specific checks below never match on those dialects. Without this
+	// check an expired lock row cannot be taken over at all: every retry is a
+	// second INSERT that comes back as ErrDuplicatedKey and is treated as a
+	// genuine failure, so the lock is stuck forever.
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
 	}
 
 	if mysqlErr, ok := err.(*mysql.MySQLError); ok {
